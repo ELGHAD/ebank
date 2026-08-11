@@ -1,4 +1,4 @@
-# eBank Monorepo
+# eBank
 
 [![Build](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/)
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/)
