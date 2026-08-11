@@ -1,0 +1,33 @@
+# Root .gitignore for combined repo
+
+# Node
+node_modules/
+build/
+
+# Java / Maven
+target/
+*.log
+.mvn/
+
+# IDEs
+.vscode/
+.idea/
+*.iml
+
+# Docker / env
+.env
+.env.local
+docker-compose.override.yml
+
+# Backend local secrets
+ebank-backend/ebank/src/main/resources/application.properties
+
+# Backend build
+ebank-backend/ebank/target/
+
+# Frontend
+ebank-frontend/node_modules/
+ebank-frontend/build/
+
+# Ignore nested git (we will remove nested .git when consolidating)
+**/.git
