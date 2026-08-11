@@ -1,0 +1,26 @@
+# Build output
+/target/
+build/
+
+# Local IDE files
+/.idea/
+/*.iml
+/.classpath
+/.project
+/.settings/
+
+# Local configuration containing secrets
+/src/main/resources/application.properties
+/src/main/resources/application.yaml
+/application.properties
+/application.yml
+/*.env
+
+# OS and editor files
+*.log
+*.tmp
+*.temp
+*.swp
+.DS_Store
+Thumbs.db
+ehthumbs.db
