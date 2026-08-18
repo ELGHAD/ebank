@@ -117,43 +117,41 @@ Many demo banking platforms suffer from bloated configurations or tangled codeba
   1. Environment Setup
       Copy the sample environment file to create your local .env:
       
-      Bash
-      # Linux / macOS
-      cp .env.example .env
+          Bash
+          # Linux / macOS
+          cp .env.example .env
+          
+          # Windows PowerShell
+          copy .env.example .env
+     Review and customize .env values:
       
-      # Windows PowerShell
-      copy .env.example .env
-      Review and customize .env values:
-      
-      Code snippet
-      MYSQL_ROOT_PASSWORD=ChangeMeRootPassword
-      MYSQL_DATABASE=ebank_db
-      MYSQL_USER=ebank
-      MYSQL_PASSWORD=ChangeMeDbPassword
-      APP_JWT_SECRET=ChangeMeJwtSecret
-      APP_JWT_EXPIRATION=3600000
-      BACKEND_PORT=8080
-      FRONTEND_PORT=3000
-      REACT_APP_API_BASE_URL=http://localhost:8080
-  2. Run with Docker Compose (Recommended)
+
+          MYSQL_ROOT_PASSWORD=ChangeMeRootPassword
+          MYSQL_DATABASE=ebank_db
+          MYSQL_USER=ebank
+          MYSQL_PASSWORD=ChangeMeDbPassword
+          APP_JWT_SECRET=ChangeMeJwtSecret
+          APP_JWT_EXPIRATION=3600000
+          BACKEND_PORT=8080
+          FRONTEND_PORT=3000
+          REACT_APP_API_BASE_URL=http://localhost:8080
+     
+  3. Run with Docker Compose (Recommended)
       Start the entire application stack (MySQL, Backend, Frontend, and Nginx) with a single command:
-      
-      Bash
+
       docker compose up --build -d
       Access the application at http://localhost:3000.
       
-  3. Alternative: Running Locally without Docker
-      Backend Setup
-      Bash
-      cd ebank-backend
-      ./mvnw clean package
-      ./mvnw spring-boot:run
-      Frontend Setup
-      Bash
-      cd ebank-frontend
-      npm install
-      npm start
-      Note: Ensure REACT_APP_API_BASE_URL points to your active backend (default: http://localhost:8080).
+  4. Alternative: Running Locally without Docker
+     Backend Setup
+                    cd ebank-backend
+                    ./mvnw clean package
+                    ./mvnw spring-boot:run
+     Frontend Setup
+            cd ebank-frontend
+            npm install
+            npm start
+     Note: Ensure REACT_APP_API_BASE_URL points to your active backend (default: http://localhost:8080).
 
 📊 API Reference
   🔑 Authentication Endpoints
