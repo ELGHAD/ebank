@@ -74,7 +74,6 @@ Many demo banking platforms suffer from bloated configurations or tangled codeba
 
 ## 🏗️ Project Architecture & Structure
 
-text
         ebank/
         ├── .env.example
         ├── docker-compose.yml
@@ -108,18 +107,14 @@ text
                 └── services/               # HTTP service abstractions
 
 🚀 Quick Start Guide
-      Prerequisites
-      Ensure you have the following installed locally:
+    Prerequisites
+    Ensure you have the following installed locally:    
+    Docker & Docker Compose
+    Java 17+ (if running backend locally)
+    Node.js 20+ (if running frontend locally)
+    Maven (optional, Maven wrapper ./mvnw is included)
       
-      Docker & Docker Compose
-      
-      Java 17+ (if running backend locally)
-      
-      Node.js 20+ (if running frontend locally)
-      
-      Maven (optional, Maven wrapper ./mvnw is included)
-      
-      1. Environment Setup
+  1. Environment Setup
       Copy the sample environment file to create your local .env:
       
       Bash
@@ -140,14 +135,14 @@ text
       BACKEND_PORT=8080
       FRONTEND_PORT=3000
       REACT_APP_API_BASE_URL=http://localhost:8080
-      2. Run with Docker Compose (Recommended)
+  2. Run with Docker Compose (Recommended)
       Start the entire application stack (MySQL, Backend, Frontend, and Nginx) with a single command:
       
       Bash
       docker compose up --build -d
       Access the application at http://localhost:3000.
       
-      3. Alternative: Running Locally without Docker
+  3. Alternative: Running Locally without Docker
       Backend Setup
       Bash
       cd ebank-backend
@@ -161,7 +156,7 @@ text
       Note: Ensure REACT_APP_API_BASE_URL points to your active backend (default: http://localhost:8080).
 
 📊 API Reference
-      🔑 Authentication Endpoints
+  🔑 Authentication Endpoints
       POST /api/auth/login
       Authenticates user credentials and returns a JWT token.
       
@@ -184,7 +179,7 @@ text
       GET /api/auth/me
       Validates active JWT session and retrieves current user profile.
       
-      👤 Client Endpoints
+  👤 Client Endpoints
       GET /api/client/accounts
       Retrieves all bank accounts belonging to the authenticated client.
       
@@ -224,16 +219,16 @@ text
     Bash
     cd ebank-frontend
     npm test
-    🗺️ Roadmap & Future Enhancements
-    [ ] Complete transaction processing engine on backend (/api/client/transfers).
+🗺️ Roadmap & Future Enhancements
+  [ ] Complete transaction processing engine on backend (/api/client/transfers).
     
-    [ ] Add an Admin Analytics Dashboard with interactive visual statistics.
+  [ ] Add an Admin Analytics Dashboard with interactive visual statistics.
     
-    [ ] Implement pagination & transaction history filtering.
+  [ ] Implement pagination & transaction history filtering.
     
-    [ ] Increase test coverage (Integration & E2E tests).
+  [ ] Increase test coverage (Integration & E2E tests).
     
-    [ ] Cloud Deployment Guides (AWS ECS / Azure App Service / Kubernetes).
+  [ ] Cloud Deployment Guides (AWS ECS / Azure App Service / Kubernetes).
 
 🤝 Contributing
   Contributions are warmly welcomed! To contribute:
