@@ -138,9 +138,9 @@ Many demo banking platforms suffer from bloated configurations or tangled codeba
      
   3. Run with Docker Compose (Recommended)
       Start the entire application stack (MySQL, Backend, Frontend, and Nginx) with a single command:
-
-      docker compose up --build -d
-      Access the application at http://localhost:3000.
+    
+          docker compose up --build -d
+          Access the application at http://localhost:3000.
       
   4. Alternative: Running Locally without Docker
      Backend Setup
@@ -148,9 +148,9 @@ Many demo banking platforms suffer from bloated configurations or tangled codeba
                     ./mvnw clean package
                     ./mvnw spring-boot:run
      Frontend Setup
-            cd ebank-frontend
-            npm install
-            npm start
+                    cd ebank-frontend
+                    npm install
+                    npm start
      Note: Ensure REACT_APP_API_BASE_URL points to your active backend (default: http://localhost:8080).
 
 📊 API Reference
