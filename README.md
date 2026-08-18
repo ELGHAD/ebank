@@ -231,17 +231,17 @@ Many demo banking platforms suffer from bloated configurations or tangled codeba
   [ ] Cloud Deployment Guides (AWS ECS / Azure App Service / Kubernetes).
 
 🤝 Contributing
-  Contributions are warmly welcomed! To contribute:
-  
-  Fork the repository.
-  
-  Create your feature branch: git checkout -b feature/AmazingFeature.
-  
-  Commit your changes: git commit -m 'Add some AmazingFeature'.
-  
-  Push to the branch: git push origin feature/AmazingFeature.
-  
-  Open a Pull Request.
+ Contributions are warmly welcomed! To contribute:
+    
+    Fork the repository.
+    
+    Create your feature branch: git checkout -b feature/AmazingFeature.
+    
+    Commit your changes: git commit -m 'Add some AmazingFeature'.
+    
+    Push to the branch: git push origin feature/AmazingFeature.
+    
+    Open a Pull Request.
 
 📄 License
   This project is currently distributed without an explicit license. If you intend to use or adapt this repository publicly, please consider adding an appropriate open-source license (such as MIT)
