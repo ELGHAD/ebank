@@ -74,7 +74,7 @@ Many demo banking platforms suffer from bloated configurations or tangled codeba
 
 ## 🏗️ Project Architecture & Structure
 
-```text
+text
         ebank/
         ├── .env.example
         ├── docker-compose.yml
