@@ -243,4 +243,5 @@ Many demo banking platforms suffer from bloated configurations or tangled codeba
     Open a Pull Request.
 
 📄 License
-  This project is currently distributed without an explicit license. If you intend to use or adapt this repository publicly, please consider adding an appropriate open-source license (such as MIT)
+
+    This project is currently distributed without an explicit license. If you intend to use or adapt this repository publicly, please consider adding an appropriate open-source license (such as MIT)
