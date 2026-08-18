@@ -218,15 +218,16 @@ Many demo banking platforms suffer from bloated configurations or tangled codeba
     cd ebank-frontend
     npm test
 🗺️ Roadmap & Future Enhancements
-  [ ] Complete transaction processing engine on backend (/api/client/transfers).
-    
-  [ ] Add an Admin Analytics Dashboard with interactive visual statistics.
-    
-  [ ] Implement pagination & transaction history filtering.
-    
-  [ ] Increase test coverage (Integration & E2E tests).
-    
-  [ ] Cloud Deployment Guides (AWS ECS / Azure App Service / Kubernetes).
+
+      [ ] Complete transaction processing engine on backend (/api/client/transfers).
+        
+      [ ] Add an Admin Analytics Dashboard with interactive visual statistics.
+        
+      [ ] Implement pagination & transaction history filtering.
+        
+      [ ] Increase test coverage (Integration & E2E tests).
+        
+      [ ] Cloud Deployment Guides (AWS ECS / Azure App Service / Kubernetes).
 
 🤝 Contributing
  Contributions are warmly welcomed! To contribute:
