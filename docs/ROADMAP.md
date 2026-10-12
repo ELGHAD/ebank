@@ -78,12 +78,31 @@ Not verified: behaviour in a real browser (the flows were exercised over HTTP an
 
 Not done: refresh tokens (deliberately not introduced), a shared throttling store for multiple instances, an audit UI for agents, HTTPS/HSTS (deployment phase).
 
+## Phase 4 — Frontend and product experience ✅ (2026-10-12)
+
+| Acceptance criterion | Result | Evidence |
+|---|---|---|
+| Agents find clients without knowing ids: search (name, email, identity ref.), pagination, account counts | ✅ | `AgentWorkspaceIntegrationTest` (tenant-scoped, case-insensitive, LIKE wildcards matched literally); mutation checks on the org filter and the escaping; `ClientsPage.test` |
+| Client detail: profile, onboarding state, accounts, open account | ✅ | `AgentWorkspaceIntegrationTest`, `ClientDetailPage.test` |
+| Block / unblock / close with confirmation; close only at zero balance, final; audited | ✅ | Backend rules with row lock + audit event; inline two-step confirmation (`ConfirmButton`); browser: a transfer to a blocked account is refused with a clear message, then succeeds after unblocking |
+| Agent account history and audit log pages | ✅ | `AuditLogPage.test` (incl. agent history) |
+| One layout: skip link, landmarks, role-based navigation with `aria-current`, focus moved to the page title on navigation | ✅ | `AppShell.test`; browser: title focused after navigation, skip link first focusable element |
+| Loading, empty, error and success states on every page; no stale responses | ✅ | Shared `useQuery` hook (`useQuery.test`: a late response for an old query is ignored) |
+| Accessibility | ✅ | axe-core 4.13 in headless Chrome: **0 violations (any impact) on 8 pages** (login, clients, client detail, audit log, change password, dashboard, transfer, history) |
+| Responsive | ✅ | No horizontal page scroll at 375 px (an absolutely positioned `.sr-only` header escaping its scroll container was found and fixed) |
+| Real-browser scenario | ✅ | 21/21 checks, including CSP (no violations) and console (no unexpected errors) |
+| Suites | ✅ | Backend 151 tests; frontend 45 tests; lint, build, `npm audit` 0 |
+| Test gate cannot pass with missing tests | ✅ | Found: once in about seven runs on Windows right after `npm ci`, Vitest reported success after collecting only 7 of 14 files (cause not identified). `npm test` now cross-checks the JSON report against the test files on disk (`scripts/verify-test-run.mjs`), and a simulated partial run fails with the missing file named |
+
+Screenshots of the verified flows: [docs/screenshots](screenshots).
+
+Not done: no seeded demo clients (the demo agent creates them); browser checks still run from a local script (Phase 7 commits them as Playwright tests).
+
 ## Later phases
 
-4. Frontend and product experience.
 5. Multi-tenant organizations.
 6. Plans, quotas, simulated billing.
-7. E2E tests and CI gates (turn the headless-browser scenario into a committed Playwright suite).
+7. E2E tests and CI gates (commit the headless-browser scenario, with its axe-core checks, as a Playwright suite).
 8. AWS deployment (separate cost proposal and approval first).
 9. Observability.
 10. Portfolio documentation.

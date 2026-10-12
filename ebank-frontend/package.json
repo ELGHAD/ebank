@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --reporter=default --reporter=json --outputFile=test-results/vitest.json && node scripts/verify-test-run.mjs",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings=0"
   },

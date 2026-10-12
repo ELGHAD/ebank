@@ -25,6 +25,12 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, Long> 
 
     boolean existsByIdAndOrganizationId(Long id, Long organizationId);
 
+    Optional<BankAccount> findByIdAndOrganizationId(Long id, Long organizationId);
+
+    /** Number of accounts per client, for a page of clients, in one query. Rows: [clientId, count]. */
+    @Query("select a.client.id, count(a) from BankAccount a where a.client.id in :clientIds group by a.client.id")
+    List<Object[]> countByClientIds(@Param("clientIds") List<Long> clientIds);
+
     @Query("select a.id from BankAccount a where a.rib = :rib and a.organization.id = :organizationId")
     Optional<Long> findIdByRibAndOrganizationId(@Param("rib") String rib, @Param("organizationId") Long organizationId);
 

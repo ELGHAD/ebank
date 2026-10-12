@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { createTransfer, getMyAccounts } from "../services/clientService";
 import { errorMessage, fieldErrors } from "../api/errors";
 import { isValidRib, normalizeRib } from "../utils/rib";
 import { formatMoney } from "../utils/format";
-import "../styles/client.css";
+import PageHeader from "../components/PageHeader";
 
 const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
 
@@ -16,8 +16,6 @@ const newIdempotencyKey = () =>
 const emptyForm = { sourceAccountId: "", destinationRib: "", amount: "", description: "" };
 
 export default function NewTransfer() {
-  const navigate = useNavigate();
-
   const [accounts, setAccounts] = useState([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [form, setForm] = useState(emptyForm);
@@ -140,17 +138,12 @@ export default function NewTransfer() {
     );
 
   return (
-    <div className="client-page">
-      <div className="container">
-        <div className="topbar">
-          <div>
-            <h1>New transfer</h1>
-            <div className="subtitle">Simulated transfer to any account of your bank</div>
-          </div>
-          <button type="button" className="btn" onClick={() => navigate("/client")}>
-            <span aria-hidden="true">←</span> Back
-          </button>
-        </div>
+    <>
+      <PageHeader
+        title="New transfer"
+        breadcrumb={<Link to="/client">← My accounts</Link>}
+        subtitle="Simulated transfer to any account of your bank"
+      />
 
         <div className="card">
           {loadError && (
@@ -260,9 +253,6 @@ export default function NewTransfer() {
             </section>
           )}
         </div>
-
-        <div className="footer">Banking simulation · synthetic data only</div>
-      </div>
-    </div>
+    </>
   );
 }

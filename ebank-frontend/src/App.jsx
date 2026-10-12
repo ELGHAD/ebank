@@ -2,14 +2,17 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 
+import AppShell from "./components/AppShell";
+import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
-import AdminDashboard from "./pages/AdminDashboard";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 import ClientDashboard from "./pages/ClientDashboard";
 import NewTransfer from "./pages/NewTransfer";
 import AccountHistory from "./pages/AccountHistory";
-import ChangePasswordPage from "./pages/ChangePasswordPage";
-
-import ProtectedRoute from "./components/ProtectedRoute";
+import ClientsPage from "./pages/agent/ClientsPage";
+import OnboardClientPage from "./pages/agent/OnboardClientPage";
+import ClientDetailPage from "./pages/agent/ClientDetailPage";
+import AuditLogPage from "./pages/agent/AuditLogPage";
 
 const App = () => {
   return (
@@ -19,47 +22,7 @@ const App = () => {
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
 
-          {/* Admin */}
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute requiredRole="AGENT">
-                <AdminDashboard />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Client */}
-          <Route
-            path="/client"
-            element={
-              <ProtectedRoute requiredRole="CLIENT">
-                <ClientDashboard />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Client - Transfer */}
-          <Route
-            path="/client/transfer"
-            element={
-              <ProtectedRoute requiredRole="CLIENT">
-                <NewTransfer />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Client - Account history */}
-          <Route
-            path="/client/accounts/:accountId"
-            element={
-              <ProtectedRoute requiredRole="CLIENT">
-                <AccountHistory />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Any signed-in user */}
+          {/* Any signed-in user (also reachable while a password change is required) */}
           <Route
             path="/change-password"
             element={
@@ -68,6 +31,36 @@ const App = () => {
               </ProtectedRoute>
             }
           />
+
+          {/* Agent workspace */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute requiredRole="AGENT">
+                <AppShell />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ClientsPage />} />
+            <Route path="clients/new" element={<OnboardClientPage />} />
+            <Route path="clients/:clientId" element={<ClientDetailPage />} />
+            <Route path="accounts/:accountId" element={<AccountHistory role="agent" />} />
+            <Route path="audit" element={<AuditLogPage />} />
+          </Route>
+
+          {/* Client space */}
+          <Route
+            path="/client"
+            element={
+              <ProtectedRoute requiredRole="CLIENT">
+                <AppShell />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<ClientDashboard />} />
+            <Route path="transfer" element={<NewTransfer />} />
+            <Route path="accounts/:accountId" element={<AccountHistory role="client" />} />
+          </Route>
 
           {/* Default */}
           <Route path="*" element={<Navigate to="/login" replace />} />

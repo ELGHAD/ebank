@@ -44,7 +44,7 @@ jobs:
           cache-dependency-path: ebank-frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npm test
+      - run: npm test # also verifies that every test file actually ran (scripts/verify-test-run.mjs)
       - run: npm run build
       - name: Audit runtime dependencies
         run: npm audit --omit=dev --audit-level=high

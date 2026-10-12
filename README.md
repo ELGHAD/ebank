@@ -17,9 +17,23 @@ A full-stack banking **simulation** built with Spring Boot and React. Agents onb
 | Append-only ledger, paginated and filterable account history | Working, tested |
 | Multi-tenant administration, plans and quotas | Planned |
 | Security hardening: HttpOnly cookie sessions + CSRF, revocation, forced first-login password change, login throttling, CSP, audit trail, least-privilege DB role | Working, tested (incl. a real-browser run) |
+| Agent workspace: client search, client detail, account block / unblock / close, account history, audit log | Working, tested (unit, integration, real browser) |
+| Accessible, responsive UI (axe-core: 0 violations on 8 pages; usable at 375 px) | Verified in headless Chrome |
 | Cloud deployment | Not deployed |
 
 The full plan, with acceptance criteria, is in [docs/ROADMAP.md](docs/ROADMAP.md). The initial audit is in [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md), and design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+
+## Screenshots
+
+Taken in headless Chrome against the Docker stack (synthetic data).
+
+| Agent: client detail | Client: transfer completed |
+|---|---|
+| ![Client detail with accounts and status actions](docs/screenshots/04-client-detail.png) | ![Transfer confirmation with the new balance](docs/screenshots/08-transfer-done.png) |
+| **Agent: audit log** | **Client: account history** |
+| ![Audit log of the organization](docs/screenshots/05-audit-log.png) | ![Account history with running balance](docs/screenshots/09-history.png) |
+
+More in [docs/screenshots](docs/screenshots), including the 375 px mobile layout.
 
 ## Architecture
 
@@ -153,7 +167,11 @@ Secrets live only in `.env` / `application-local.yml`, both git-ignored. `VITE_*
 | `GET /api/admin/audit-events` | AGENT | Audit trail of the agent's organization (`page`, `size`, `type`) |
 | `POST /api/admin/clients` | AGENT | Onboard a client → client, username, one-time password |
 | `POST /api/admin/accounts` | AGENT | `{clientId, currency?, initialDeposit?}` → account with generated RIB |
+| `GET /api/admin/clients?q=&page=&size=` | AGENT | Search the organization's clients (name, email, identity reference), with account counts |
+| `GET /api/admin/clients/{id}` | AGENT | Client profile, onboarding state and accounts |
 | `GET /api/admin/clients/{id}/accounts` | AGENT | Accounts of a client of the agent's organization |
+| `GET /api/admin/accounts/{id}` | AGENT | One account of the organization |
+| `PATCH /api/admin/accounts/{id}/status` | AGENT | `{status: ACTIVE\|BLOCKED\|CLOSED}`; closing needs a zero balance and is final |
 | `GET /api/client/accounts` | CLIENT | The caller's own accounts |
 | `POST /api/client/transfers` | CLIENT | Header `Idempotency-Key`; `{sourceAccountId, destinationRib, amount, description?}` → transfer + new balance |
 | `GET /api/client/accounts/{id}/entries` | CLIENT | Own account history: `page`, `size` (≤100), `type` (DEPOSIT/DEBIT/CREDIT), `from`/`to` (dates, UTC) |
@@ -166,11 +184,9 @@ Browsers authenticate with the session cookie, and every POST needs the `X-XSRF-
 
 ## Known limitations
 
-- Agents have no client search or account list in the UI yet (they need the numeric client id).
 - No transfer reversals, scheduled transfers or FX; transfers are same-currency only.
 - Login throttling is in memory (per instance, reset on restart). There is no refresh token: users sign in again when the session expires (60 minutes by default).
 - Locally there is no HTTPS (and therefore no HSTS); that belongs to the deployment's TLS entry point.
-- Agents have no UI for the audit trail yet (API only).
 - Single seeded organization; organization management comes later.
 
 ## License

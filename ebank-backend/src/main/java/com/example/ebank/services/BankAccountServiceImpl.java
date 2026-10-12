@@ -11,6 +11,7 @@ import com.example.ebank.dto.OpenAccountRequest;
 import com.example.ebank.entities.AccountStatus;
 import com.example.ebank.entities.BankAccount;
 import com.example.ebank.entities.Client;
+import com.example.ebank.exception.BusinessRuleException;
 import com.example.ebank.exception.NotFoundException;
 import com.example.ebank.repositories.BankAccountRepository;
 import com.example.ebank.repositories.ClientRepository;
@@ -75,6 +76,39 @@ public class BankAccountServiceImpl implements BankAccountService {
     public List<AccountResponse> getMyAccounts(AppUserPrincipal client) {
         return bankAccountRepository.findByClientAppUserIdOrderByIdAsc(client.userId())
                 .stream().map(Mappers::toAccountResponse).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AccountResponse getAccount(AppUserPrincipal agent, Long accountId) {
+        return bankAccountRepository.findByIdAndOrganizationId(accountId, agent.organizationId())
+                .map(Mappers::toAccountResponse)
+                .orElseThrow(() -> new NotFoundException("ACCOUNT_NOT_FOUND", "Account not found"));
+    }
+
+    @Override
+    @Transactional
+    public AccountResponse changeStatus(AppUserPrincipal agent, Long accountId, AccountStatus status) {
+        if (!bankAccountRepository.existsByIdAndOrganizationId(accountId, agent.organizationId())) {
+            throw new NotFoundException("ACCOUNT_NOT_FOUND", "Account not found");
+        }
+        // Same row lock as transfers: closing cannot race with a credit arriving at the same moment
+        BankAccount account = bankAccountRepository.findByIdForUpdate(accountId).orElseThrow();
+        AccountStatus previous = account.getStatus();
+        if (previous == status) {
+            return Mappers.toAccountResponse(account);
+        }
+        if (previous == AccountStatus.CLOSED) {
+            throw new BusinessRuleException("ACCOUNT_CLOSED", "A closed account cannot be reopened");
+        }
+        if (status == AccountStatus.CLOSED && account.getBalance().signum() != 0) {
+            throw new BusinessRuleException("BALANCE_NOT_ZERO",
+                    "Only an account with a zero balance can be closed (transfer the remaining funds first)");
+        }
+        account.setStatus(status);
+        audit.record(agent, AuditEventType.ACCOUNT_STATUS_CHANGED, "account:" + account.getId(),
+                previous + " -> " + status);
+        return Mappers.toAccountResponse(account);
     }
 
     private Client findClientOfOrganization(AppUserPrincipal agent, Long clientId) {

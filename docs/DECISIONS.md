@@ -232,3 +232,22 @@ Short records of the significant choices, why they were made and what they cost.
 **Evidence.** The whole integration test suite runs as `ebank_app` against PostgreSQL. A dedicated test checks that `DROP TABLE`, `ALTER TABLE … DISABLE TRIGGER`, `CREATE TABLE`, deleting audit rows and reading Flyway history are all refused. The append-only test checks both layers (no grant for the app, triggers for the owner).
 
 **Operational note.** The init script only runs when the database volume is created. An existing Phase 1/2 Docker volume must be recreated (`docker compose down -v`, which deletes its demo data). In local development, connecting as `postgres` for both roles skips the grants (the V3 block detects it).
+
+---
+
+## ADR-018 — Frontend structure: app shell, one stylesheet, small shared primitives
+
+**Context.** Pages had grown independently, each with its own inline styles, header and loading logic, plus two visual themes. Agents needed numeric ids to work.
+
+**Decision.**
+- **Layout and styles:** one `AppShell` layout (skip link, header with role-based navigation, `<main>`, footer) for every signed-in page. One stylesheet with colour tokens (`styles/app.css`), so contrast is reviewed in one place.
+- **A few in-house primitives instead of a UI library:**
+  - `PageHeader` updates the document title and moves focus to the page heading after each navigation, so screen-reader users hear the new page.
+  - `useQuery` exposes a derived loading state, and an answer to an outdated request is ignored.
+  - `ConfirmButton` is an inline two-step confirmation: no modal and no focus trap to get wrong.
+  - `Pagination` and `StatusBadge`.
+- **Routing:** nested routes, `/admin/*` for agents and `/client/*` for clients, each guarded by role. The backend enforces the same rules independently.
+
+**Why no component library.** The app has about ten pages. A library would add weight and a theming layer to learn, for little gain. Revisit if the UI grows significantly.
+
+**Verification.** axe-core in headless Chrome reports zero violations on all eight pages, and pages are usable at 375 px. One real bug was found this way: an absolutely positioned `.sr-only` table header escaped its scroll container and widened the page on phones.

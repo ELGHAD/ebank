@@ -24,7 +24,7 @@ export default [
     languageOptions: { globals: { ...globals.node } },
   },
   {
-    files: ["vite.config.js"],
+    files: ["vite.config.js", "scripts/**"],
     languageOptions: { globals: { ...globals.node } },
   },
 ];
