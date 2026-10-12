@@ -1,27 +1,30 @@
 package com.example.ebank.config;
 
 import com.example.ebank.repositories.AppUserRepository;
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import java.util.List;
 
@@ -30,48 +33,48 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthFilter jwtAuthFilter;
     private final AppUserRepository userRepo;
+    private final JwtService jwtService;
+    private final CorsProperties corsProperties;
 
     @Bean
     public UserDetailsService userDetailsService() {
         return username -> userRepo.findByUsername(username)
-                .map(user -> org.springframework.security.core.userdetails.User
-                        .withUsername(user.getUsername())
-                        .password(user.getPassword())
-                        // IMPORTANT: since you create "ROLE_X", use hasRole("X") later
-                        .authorities(
-                                user.getRoles().stream()
-                                        .map(r -> "ROLE_" + r.getRoleName()) // ex: ROLE_CLIENT, ROLE_AGENT_GUICHET
-                                        .toArray(String[]::new)
-                        )
-                        .build()
-                )
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .map(user -> User.withUsername(user.getUsername())
+                        .password(user.getPasswordHash())
+                        .disabled(!user.isEnabled())
+                        .authorities(user.getRoles().stream()
+                                .map(r -> "ROLE_" + r.getRoleName()) // ROLE_CLIENT, ROLE_AGENT -> hasRole("CLIENT")
+                                .toArray(String[]::new))
+                        .build())
+                // UsernameNotFoundException lets Spring apply its timing-attack mitigation
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) throws Exception {
         http
+                // Stateless bearer-token API: no cookies are used for authentication, so CSRF does not apply.
+                // To be revisited together with the token-storage change (Phase 3).
                 .csrf(csrf -> csrf.disable())
-                .cors(Customizer.withDefaults()) // ✅ enable CORS with bean below
+                .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(ex -> ex
+                        // Route 401/403 to GlobalExceptionHandler so they share the problem+json format
+                        .authenticationEntryPoint((req, res, e) -> exceptionResolver.resolveException(req, res, null, e))
+                        .accessDeniedHandler((req, res, e) -> exceptionResolver.resolveException(req, res, null, e)))
                 .authorizeHttpRequests(auth -> auth
-                        // allow auth endpoints
-                        .requestMatchers("/api/auth/**").permitAll()
-
-                        // ✅ allow preflight requests
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                        // ✅ example role rules (optional, keep or remove)
-                        // If your roles are "CLIENT" and "AGENT_GUICHET" in DB:
+                        // Error dispatches must not be re-authorized, otherwise every error turns into 401/403
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/api/client/**").hasRole("CLIENT")
-                        .requestMatchers("/api/admin/**").hasRole("AGENT_GUICHET")
-
+                        .requestMatchers("/api/admin/**").hasRole("AGENT")
                         .anyRequest().authenticated()
                 )
-                .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(new JwtAuthFilter(jwtService, userRepo), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -79,31 +82,20 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-
-        // ✅ change this if your frontend is different
-        config.setAllowedOrigins(List.of("http://localhost:3000"));
-
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedOrigins(corsProperties.allowedOrigins());
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        config.setExposedHeaders(List.of("Authorization"));
-        config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
+        source.registerCorsConfiguration("/api/**", config);
         return source;
     }
 
     @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-        provider.setUserDetailsService(userDetailsService());
+    public AuthenticationManager authenticationManager() {
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService());
         provider.setPasswordEncoder(passwordEncoder());
-        return provider;
-    }
-
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration cfg) throws Exception {
-        return cfg.getAuthenticationManager();
+        return new ProviderManager(provider);
     }
 
     @Bean

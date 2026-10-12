@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import axiosClient from "../api/axiosClient";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
+import { errorMessage } from "../api/errors";
 
 const LoginPage = () => {
   const [form, setForm] = useState({ username: "", password: "" });
@@ -9,7 +10,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
 
-  const { login } = useAuth();
+  const { auth, login } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) =>
@@ -28,16 +29,20 @@ const LoginPage = () => {
       setLoading(true);
       const res = await axiosClient.post("/api/auth/login", form);
 
-      const { accessToken, username, role } = res.data;
-      login({ token: accessToken, username, role });
+      const { accessToken, user } = res.data;
+      login({ token: accessToken, user });
 
-      navigate(role === "AGENT_GUICHET" ? "/admin" : "/client");
-    } catch {
-      setError("Invalid username or password");
+      navigate(user.roles.includes("AGENT") ? "/admin" : "/client");
+    } catch (err) {
+      setError(errorMessage(err, "Login failed. Please try again."));
     } finally {
       setLoading(false);
     }
   };
+
+  if (auth.isAuthenticated) {
+    return <Navigate to={auth.role === "AGENT" ? "/admin" : "/client"} replace />;
+  }
 
   return (
     <>
@@ -194,41 +199,54 @@ const LoginPage = () => {
 
           <form onSubmit={handleSubmit}>
             <div className="field">
-              <label>Username</label>
+              <label htmlFor="login-username">Email</label>
               <div className="input-box">
                 <input
+                  id="login-username"
                   name="username"
+                  type="email"
+                  autoComplete="username"
                   value={form.username}
                   onChange={handleChange}
-                  placeholder="Enter username"
+                  placeholder="you@example.com"
                 />
               </div>
             </div>
 
             <div className="field">
-              <label>Password</label>
+              <label htmlFor="login-password">Password</label>
               <div className="input-box">
                 <input
+                  id="login-password"
+                  autoComplete="current-password"
                   type={showPwd ? "text" : "password"}
                   name="password"
                   value={form.password}
                   onChange={handleChange}
                   placeholder="Enter password"
                 />
-                <button type="button" onClick={() => setShowPwd(!showPwd)}>
+                <button
+                  type="button"
+                  aria-label={showPwd ? "Hide password" : "Show password"}
+                  onClick={() => setShowPwd(!showPwd)}
+                >
                   {showPwd ? "Hide" : "Show"}
                 </button>
               </div>
             </div>
 
-            {error && <div className="error">{error}</div>}
+            {error && (
+              <div className="error" role="alert">
+                {error}
+              </div>
+            )}
 
-            <button className="login-btn" disabled={loading}>
+            <button type="submit" className="login-btn" disabled={loading}>
               {loading ? "Signing in..." : "Login"}
             </button>
           </form>
 
-          <div className="footer">© 2025 eBank — Secure & Trusted</div>
+          <div className="footer">Banking simulation · synthetic data only</div>
         </div>
       </div>
     </>

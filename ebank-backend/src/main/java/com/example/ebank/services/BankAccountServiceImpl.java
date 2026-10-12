@@ -1,56 +1,83 @@
 package com.example.ebank.services;
 
-import com.example.ebank.dto.AddBankAccountRequest;
-import com.example.ebank.dto.AddBankAccountResponse;
+import com.example.ebank.banking.MoneyPolicy;
+import com.example.ebank.banking.Rib;
+import com.example.ebank.config.AppUserPrincipal;
+import com.example.ebank.dto.AccountResponse;
+import com.example.ebank.dto.Mappers;
+import com.example.ebank.dto.OpenAccountRequest;
 import com.example.ebank.entities.AccountStatus;
 import com.example.ebank.entities.BankAccount;
 import com.example.ebank.entities.Client;
+import com.example.ebank.exception.NotFoundException;
 import com.example.ebank.repositories.BankAccountRepository;
 import com.example.ebank.repositories.ClientRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class BankAccountServiceImpl implements BankAccountService {
 
+    private static final int MAX_RIB_ATTEMPTS = 5;
+
     private final BankAccountRepository bankAccountRepository;
     private final ClientRepository clientRepository;
+    private final MoneyPolicy moneyPolicy;
 
+    /**
+     * Phase 1 stores the initial deposit directly in the balance. Phase 2 (ledger) will record it as an
+     * explicit opening-deposit entry so that every balance is explained by ledger entries.
+     */
     @Override
-    public AddBankAccountResponse createAccount(AddBankAccountRequest req) {
-        Client client = clientRepository.findById(req.getClientId())
-                .orElseThrow(() -> new RuntimeException("Client not found"));
+    @Transactional
+    public AccountResponse openAccount(AppUserPrincipal agent, OpenAccountRequest req) {
+        Client client = findClientOfOrganization(agent, req.clientId());
+        String currency = moneyPolicy.resolveCurrency(req.currency());
 
-        BankAccount acc = new BankAccount();
-        acc.setClient(client);
-        acc.setRib(req.getRib());
-        acc.setBalance(req.getBalance());
-        acc.setStatus(AccountStatus.OUVERT);
-        acc.setCreatedAt(LocalDateTime.now());
+        BankAccount account = new BankAccount();
+        account.setOrganization(client.getOrganization());
+        account.setClient(client);
+        account.setRib(newUniqueRib());
+        account.setCurrency(currency);
+        account.setBalance(moneyPolicy.requireNonNegativeAmount(req.initialDeposit(), currency));
+        account.setStatus(AccountStatus.ACTIVE);
+        bankAccountRepository.saveAndFlush(account);
 
-        bankAccountRepository.save(acc);
-
-        AddBankAccountResponse res = new AddBankAccountResponse();
-        res.setAccountId(acc.getId());
-        res.setRib(acc.getRib());
-        res.setMessage("Bank account created successfully");
-        return res;
+        return Mappers.toAccountResponse(account);
     }
 
     @Override
-    public List<BankAccount> getAccountsByClient(Long clientId) {
-        // IMPORTANT: use findByClient_Id NOT findByClientId
-        return bankAccountRepository.findByClient_Id(clientId);
+    @Transactional(readOnly = true)
+    public List<AccountResponse> getAccountsOfClient(AppUserPrincipal agent, Long clientId) {
+        findClientOfOrganization(agent, clientId);
+        return bankAccountRepository.findByClientIdAndOrganizationIdOrderByIdAsc(clientId, agent.organizationId())
+                .stream().map(Mappers::toAccountResponse).toList();
     }
 
     @Override
-    public List<BankAccount> getMyAccounts(Authentication authentication) {
-        String username = authentication.getName();
-        return bankAccountRepository.findByClient_AppUser_Username(username);
+    @Transactional(readOnly = true)
+    public List<AccountResponse> getMyAccounts(AppUserPrincipal client) {
+        return bankAccountRepository.findByClientAppUserIdOrderByIdAsc(client.userId())
+                .stream().map(Mappers::toAccountResponse).toList();
+    }
+
+    private Client findClientOfOrganization(AppUserPrincipal agent, Long clientId) {
+        return clientRepository.findByIdAndOrganizationId(clientId, agent.organizationId())
+                .orElseThrow(() -> new NotFoundException("CLIENT_NOT_FOUND", "Client not found"));
+    }
+
+    private String newUniqueRib() {
+        // 10^20 possible bodies: a collision is practically impossible; the unique constraint is the real guarantee
+        for (int i = 0; i < MAX_RIB_ATTEMPTS; i++) {
+            String rib = Rib.generate();
+            if (!bankAccountRepository.existsByRib(rib)) {
+                return rib;
+            }
+        }
+        throw new IllegalStateException("Could not generate a unique RIB");
     }
 }

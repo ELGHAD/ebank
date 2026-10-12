@@ -1,51 +1,50 @@
 package com.example.ebank.web;
 
-import com.example.ebank.dto.AddBankAccountRequest;
-import com.example.ebank.dto.AddBankAccountResponse;
-import com.example.ebank.dto.AddClientRequest;
-import com.example.ebank.dto.AddClientResponse;
-import com.example.ebank.entities.BankAccount;
+import com.example.ebank.config.AppUserPrincipal;
+import com.example.ebank.dto.AccountResponse;
+import com.example.ebank.dto.OnboardClientRequest;
+import com.example.ebank.dto.OnboardClientResponse;
+import com.example.ebank.dto.OpenAccountRequest;
 import com.example.ebank.services.BankAccountService;
 import com.example.ebank.services.ClientService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * Agent operations. Every operation is scoped to the agent's organization.
+ */
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin("*")
 @RequiredArgsConstructor
-@PreAuthorize("hasRole('AGENT_GUICHET')")
+@PreAuthorize("hasRole('AGENT')")
 public class AdminController {
 
     private final ClientService clientService;
     private final BankAccountService bankAccountService;
 
-    /**
-     * UC-2 : Ajouter un client
-     */
     @PostMapping("/clients")
-    public AddClientResponse addClient(@RequestBody @Valid AddClientRequest request) {
-        return clientService.addClient(request);
+    @ResponseStatus(HttpStatus.CREATED)
+    public OnboardClientResponse onboardClient(@AuthenticationPrincipal AppUserPrincipal agent,
+                                               @RequestBody @Valid OnboardClientRequest request) {
+        return clientService.onboardClient(agent, request);
     }
 
-    /**
-     * UC-3 : Créer un compte bancaire pour un client
-     */
     @PostMapping("/accounts")
-    public AddBankAccountResponse createAccount(@RequestBody @Valid AddBankAccountRequest request) {
-        return bankAccountService.createAccount(request);
+    @ResponseStatus(HttpStatus.CREATED)
+    public AccountResponse openAccount(@AuthenticationPrincipal AppUserPrincipal agent,
+                                       @RequestBody @Valid OpenAccountRequest request) {
+        return bankAccountService.openAccount(agent, request);
     }
 
-    /**
-     * UC-3 (consultation côté admin) :
-     * Récupérer les comptes d'un client à partir de son ID
-     */
     @GetMapping("/clients/{clientId}/accounts")
-    public List<BankAccount> getAccountsForClient(@PathVariable Long clientId) {
-        return bankAccountService.getAccountsByClient(clientId);
+    public List<AccountResponse> getAccountsOfClient(@AuthenticationPrincipal AppUserPrincipal agent,
+                                                     @PathVariable Long clientId) {
+        return bankAccountService.getAccountsOfClient(agent, clientId);
     }
 }

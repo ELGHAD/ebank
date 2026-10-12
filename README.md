@@ -1,247 +1,128 @@
-# 🏦 eBank — Modern Banking Application
+# eBank: banking simulation platform
 
-[![Build](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge&logo=github)](https://github.com/)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue?style=for-the-badge)](https://github.com/)
-[![License](https://img.shields.io/badge/license-None-lightgrey?style=for-the-badge)](LICENSE)
-[![Tech Stack](https://img.shields.io/badge/stack-Java%20%7C%20React%20%7C%20Docker-blueviolet?style=for-the-badge)](https://github.com/)
-[![Status](https://img.shields.io/badge/status-in__progress-yellow?style=for-the-badge)](https://github.com/)
+A full-stack banking **simulation** built with Spring Boot and React. Agents onboard clients and open accounts; clients see their accounts and balances. It is being developed in phases into a small multi-tenant SaaS demo with a correct transfer engine.
 
-<p align="center">
-  <strong>eBank</strong> is a full-stack digital banking application designed for seamless performance, role-based security, and cloud readiness. Built as a monorepo, it features JWT authentication, administrative account/customer management, and an intuitive client dashboard.
-</p>
+> **Simulation only.** eBank is an educational and portfolio project. It moves no real money, connects to no payment network, is not a bank and makes no regulatory claims. Use synthetic data only.
 
----
+## Status
 
-## 📌 Overview & Problem Solved
+| Area | State |
+|---|---|
+| Authentication (JWT), roles `AGENT` / `CLIENT` | Working, tested |
+| Client onboarding by an agent (one-time password) | Working, tested |
+| Account opening (server-generated RIB, currency, initial deposit) | Working, tested |
+| Client account overview | Working, tested |
+| Tenant isolation (organization scoping) | Foundation in place and tested; a single "Demo Bank" organization is seeded |
+| **Transfers and transaction history** | **Not implemented yet** (next phase); the transfer screen says so |
+| Multi-tenant administration, plans and quotas | Planned |
+| Cloud deployment | Not deployed |
 
-`eBank` bridges the gap between educational demo projects and enterprise-ready architecture by offering a clean, lightweight, monorepo-based banking solution consisting of:
+The full plan, with acceptance criteria, is in [docs/ROADMAP.md](docs/ROADMAP.md). The initial audit is in [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md), and design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
-- 🔒 **Secure Backend**: Java Spring Boot microservice architecture.
-- 🎨 **Modern Frontend**: Interactive React SPA.
-- 🗄️ **Database**: Robust MySQL persistence layer.
-- 🐳 **Containerization**: One-command local setup via Docker Compose & Nginx proxying.
+## Architecture
 
-### 🎯 Key Architectural Goals
+```mermaid
+flowchart LR
+  B[Browser] -->|"http://localhost:3000"| N["frontend container<br/>Nginx (non-root)<br/>React SPA + /api proxy"]
+  N -->|"/api/*"| API["backend container<br/>Spring Boot 4 / Java 21<br/>JWT, JPA, Flyway"]
+  API -->|JDBC| DB[("db container<br/>PostgreSQL 18<br/>not published to host")]
+```
 
-Many demo banking platforms suffer from bloated configurations or tangled codebases. **eBank** resolves this by delivering:
+- **Backend:** a modular monolith with controllers, services, repositories, entities and DTOs.
+  - Errors are RFC 7807 problem details with stable codes.
+  - Every tenant-owned query is scoped to the caller's organization, which is loaded from the database and never taken from the request.
+- **Database:** the schema is defined by Flyway migrations; Hibernate only validates it.
+  - Money is `NUMERIC(19,2)`.
+  - Constraints enforce non-negative balances and same-organization ownership.
+- **Frontend:** React 19 + React Router, built with Vite. The API is called same-origin (`/api`).
 
-*   **Role-Based Access Control (RBAC)**: Enforced separation between `CLIENT` and `AGENT_GUICHET` (Bank Agent) roles.
-*   **Production-Ready Patterns**: Real-world REST API design, JWT stateless authentication, and Nginx reverse proxying.
-*   **Developer Experience**: Instant environment configuration and local setup via containerization.
+## Tech stack
 
----
+| Layer | Technology |
+|---|---|
+| Backend | Java 21, Spring Boot 4.1, Spring Security 7, Spring Data JPA (Hibernate 7), Bean Validation, jjwt 0.13 |
+| Database | PostgreSQL 18, Flyway |
+| Frontend | React 19, React Router 7, Axios, Vite 8 |
+| Tests | JUnit 5, Spring MockMvc, Testcontainers (PostgreSQL), Vitest, Testing Library |
+| Delivery | Docker (multi-stage, non-root images), Docker Compose, GitHub Actions, Dependabot |
 
-## ✨ Key Features
+## Run with Docker (recommended)
 
-### 🌐 Global Capabilities
-- **Stateless Authentication**: End-to-end security via JSON Web Tokens (JWT).
-- **Spring Security**: Method-level and path-based request authorization.
-- **Clean Architecture**: Backend organized into `DTOs`, `Entities`, `Repositories`, `Services`, and `Controllers`.
-- **Responsive UI**: Sleek, mobile-friendly interface built with React.
-- **Docker Integration**: Multi-container setup for effortless local orchestration.
+Prerequisites: Docker with Compose v2.
 
-### 👨‍💼 Admin Module (`AGENT_GUICHET`)
-- **Customer Onboarding**: Create and manage customer profiles.
-- **Account Management**: Provision new bank accounts linked to specific customers.
-- **Customer Lookup**: Fast querying of customer accounts via `clientId`.
+```bash
+cp .env.example .env        # Windows: copy .env.example .env
+# Fill in POSTGRES_PASSWORD, APP_JWT_SECRET (openssl rand -hex 32) and DEMO_AGENT_PASSWORD (12+ chars)
+docker compose up --build -d --wait
+```
 
-### 👤 Client Dashboard (`CLIENT`)
-- **Secure Portal**: Protected client authentication flow.
-- **Account Overview**: Real-time balance and profile insights.
-- **Fund Transfer UI**: Intuitive web interface for mock money transfers.
+Open http://localhost:3000 and sign in as the demo agent, `agent@demo.ebank.test`, with the `DEMO_AGENT_PASSWORD` from your `.env`. As the agent:
+1. Onboard a client. The response shows the client's **one-time password**, once.
+2. Open an account for that client.
+3. Log out and sign in as the client to see the account.
 
-### ⚙️ Infrastructure & DevOps
-- **MySQL DB**: Relational data management for persistence.
-- **Containerized Environment**: Pre-configured Dockerfiles for instant startup.
-- **Nginx Reverse Proxy**: Efficient `/api` routing and dynamic asset delivery.
+Stop with `docker compose down`. Add `-v` to also delete the database volume.
 
----
+## Run locally without Docker
 
-## 🛠️ Tech Stack
+Prerequisites: JDK 21, Node 24, a PostgreSQL database.
 
-| Layer | Technology | Version / Details |
+```bash
+# Backend: configure your database once
+cp ebank-backend/src/main/resources/application-local.yml.example \
+   ebank-backend/src/main/resources/application-local.yml     # git-ignored; edit URL/user/password/secrets
+cd ebank-backend
+./mvnw spring-boot:run -Dspring-boot.run.profiles=local,demo    # http://localhost:8080
+
+# Frontend (second terminal): Vite proxies /api to localhost:8080
+cd ebank-frontend
+npm ci
+npm run dev                                                     # http://localhost:3000
+```
+
+## Tests
+
+```bash
+cd ebank-backend && ./mvnw verify            # unit + integration tests; needs Docker for Testcontainers
+cd ebank-frontend && npm run lint && npm test && npm run build
+```
+
+CI runs the same commands on every push and pull request (`.github/workflows/ci.yml`).
+
+## Configuration
+
+| Variable | Used by | Purpose |
 |---|---|---|
-| **Backend** | ![Java](https://img.shields.io/badge/Java-17-007396?logo=openjdk&logoColor=white) | Java 17 LTS |
-| **Framework** | ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2.5-6DB33F?logo=springboot&logoColor=white) | Spring Boot 3.2.5, Spring Security, Spring Data JPA |
-| **Build Tool** | ![Maven](https://img.shields.io/badge/Maven-3.8.0-C71A36?logo=apachemaven&logoColor=white) | Dependency & Lifecycle Management |
-| **Database** | ![MySQL](https://img.shields.io/badge/MySQL-8.1-4479A1?logo=mysql&logoColor=white) | Relational Database |
-| **Frontend** | ![React](https://img.shields.io/badge/React-19.2.1-61DAFB?logo=react&logoColor=black) | Single Page Application Framework |
-| **Routing** | ![React Router](https://img.shields.io/badge/React_Router-7.10.1-CA4245?logo=reactrouter&logoColor=white) | Client-side Navigation |
-| **HTTP Client**| ![Axios](https://img.shields.io/badge/Axios-1.13.2-5A29E4?logo=axios&logoColor=white) | REST API Requests |
-| **DevOps** | ![Docker](https://img.shields.io/badge/Docker-24.0.5-2496ED?logo=docker&logoColor=white) ![Docker Compose](https://img.shields.io/badge/Docker_Compose-1.29.2-2496ED?logo=docker&logoColor=white) | Multi-container Environment & Orchestration |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | db, backend | Database name and credentials |
+| `APP_JWT_SECRET` | backend | HMAC key; **at least 32 bytes**, the app refuses to start otherwise |
+| `APP_JWT_EXPIRATION` | backend | Token lifetime, e.g. `60m` |
+| `SPRING_PROFILES_ACTIVE` | backend | `demo` seeds the demo agent |
+| `DEMO_AGENT_USERNAME`, `DEMO_AGENT_PASSWORD` | backend | Demo agent credentials (no built-in default password) |
+| `FRONTEND_PORT` | frontend | Host port, default 3000 |
 
----
+Secrets live only in `.env` / `application-local.yml`, both git-ignored. `VITE_*` variables are embedded in the public JavaScript bundle and must never hold secrets.
 
-## 🏗️ Project Architecture & Structure
+## API overview
 
-        ebank/
-        ├── .env.example
-        ├── docker-compose.yml
-        ├── .gitignore
-        ├── ebank-backend/
-        │   ├── Dockerfile
-        │   ├── pom.xml
-        │   ├── .mvn/
-        │   ├── src/
-        │   │   ├── main/
-        │   │   │   ├── java/com/example/ebank/
-        │   │   │   │   ├── config/         # Spring Security, JWT filters & configurations
-        │   │   │   │   ├── dto/            # REST request/response payloads
-        │   │   │   │   ├── entities/       # JPA Entities (Client, BankAccount, AppUser, etc.)
-        │   │   │   │   ├── repositories/   # Spring Data JPA repositories
-        │   │   │   │   ├── services/       # Core business logic
-        │   │   │   │   └── web/            # REST Controllers
-        │   │   └── resources/
-        │   │       └── application.properties.example
-        │   └── target/
-        └── ebank-frontend/
-            ├── Dockerfile
-            ├── nginx.conf
-            ├── package.json
-            ├── public/
-            └── src/
-                ├── api/                    # Axios client instance
-                ├── components/             # Reusable UI components
-                ├── context/                # AuthContext state management
-                ├── pages/                  # Main views/routes
-                └── services/               # HTTP service abstractions
+| Method & path | Role | Description |
+|---|---|---|
+| `POST /api/auth/login` | public | `{username, password}` → `{accessToken, tokenType, expiresIn, user}` |
+| `GET /api/auth/me` | any | Current user (id, username, roles, organization) |
+| `POST /api/admin/clients` | AGENT | Onboard a client → client, username, one-time password |
+| `POST /api/admin/accounts` | AGENT | `{clientId, currency?, initialDeposit?}` → account with generated RIB |
+| `GET /api/admin/clients/{id}/accounts` | AGENT | Accounts of a client of the agent's organization |
+| `GET /api/client/accounts` | CLIENT | The caller's own accounts |
+| `GET /actuator/health` | public | Liveness/readiness |
 
-🚀 Quick Start Guide
-    Prerequisites
-    Ensure you have the following installed locally:    
-    Docker & Docker Compose
-    Java 17+ (if running backend locally)
-    Node.js 20+ (if running frontend locally)
-    Maven (optional, Maven wrapper ./mvnw is included)
-      
-  1. Environment Setup
-      Copy the sample environment file to create your local .env:
-      
-          Bash
-          # Linux / macOS
-          cp .env.example .env
-          
-          # Windows PowerShell
-          copy .env.example .env
-     Review and customize .env values:
-      
+Errors use the `application/problem+json` format, for example `{"status":409,"code":"EMAIL_TAKEN","detail":"..."}`.
 
-          MYSQL_ROOT_PASSWORD=ChangeMeRootPassword
-          MYSQL_DATABASE=ebank_db
-          MYSQL_USER=ebank
-          MYSQL_PASSWORD=ChangeMeDbPassword
-          APP_JWT_SECRET=ChangeMeJwtSecret
-          APP_JWT_EXPIRATION=3600000
-          BACKEND_PORT=8080
-          FRONTEND_PORT=3000
-          REACT_APP_API_BASE_URL=http://localhost:8080
-     
-  3. Run with Docker Compose (Recommended)
-      Start the entire application stack (MySQL, Backend, Frontend, and Nginx) with a single command:
-    
-          docker compose up --build -d
-          Access the application at http://localhost:3000.
-      
-  4. Alternative: Running Locally without Docker
-     Backend Setup
-                    cd ebank-backend
-                    ./mvnw clean package
-                    ./mvnw spring-boot:run
-     Frontend Setup
-                    cd ebank-frontend
-                    npm install
-                    npm start
-     Note: Ensure REACT_APP_API_BASE_URL points to your active backend (default: http://localhost:8080).
+## Known limitations
 
-📊 API Reference
-  🔑 Authentication Endpoints
-      POST /api/auth/login
-      Authenticates user credentials and returns a JWT token.
-      
-      Request Body:
-      
-      JSON
-      {
-        "username": "user@example.com",
-        "password": "password"
-      }
-      Response (200 OK):
-      
-      JSON
-      {
-        "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
-        "username": "admin",
-        "role": "AGENT_GUICHET",
-        "expiresIn": 3600000
-      }
-      GET /api/auth/me
-      Validates active JWT session and retrieves current user profile.
-      
-  👤 Client Endpoints
-      GET /api/client/accounts
-      Retrieves all bank accounts belonging to the authenticated client.
-      
-      👨‍💼 Admin Endpoints (AGENT_GUICHET)
-      POST /api/admin/clients
-      Registers a new client.
-      
-      JSON
-      {
-        "identityRef": "ID-12345",
-        "firstname": "John",
-        "lastname": "Doe",
-        "birthDate": "1990-05-12",
-        "email": "john.doe@example.com",
-        "address": "10 Baker Street, London"
-      }
-      POST /api/admin/accounts
-      Creates a bank account assigned to a customer.
-      
-      JSON
-      {
-        "clientId": 1,
-        "rib": "GB82WEST12345698765432",
-        "balance": 1200.50
-      }
-      GET /api/admin/clients/{clientId}/accounts
-      Fetches all account details associated with a given clientId.
+- Transfers, transaction history, pagination and client search are not implemented yet.
+- The JWT is stored in `localStorage`; moving it to an HttpOnly cookie with CSRF protection is planned (ADR-008). There is no rate limiting on login yet.
+- Clients are not yet forced to change their one-time password.
+- Single seeded organization; organization management comes later.
 
-🧪 Testing & Quality Assurance
-    Run automated unit and integration tests across services:
-    
-    Backend Testing
-    Bash
-    cd ebank-backend
-    ./mvnw test
-    Frontend Testing
-    Bash
-    cd ebank-frontend
-    npm test
-🗺️ Roadmap & Future Enhancements
+## License
 
-      [ ] Complete transaction processing engine on backend (/api/client/transfers).
-        
-      [ ] Add an Admin Analytics Dashboard with interactive visual statistics.
-        
-      [ ] Implement pagination & transaction history filtering.
-        
-      [ ] Increase test coverage (Integration & E2E tests).
-        
-      [ ] Cloud Deployment Guides (AWS ECS / Azure App Service / Kubernetes).
-
-🤝 Contributing
- Contributions are warmly welcomed! To contribute:
-    
-    Fork the repository.
-    
-    Create your feature branch: git checkout -b feature/AmazingFeature.
-    
-    Commit your changes: git commit -m 'Add some AmazingFeature'.
-    
-    Push to the branch: git push origin feature/AmazingFeature.
-    
-    Open a Pull Request.
-
-📄 License
-
-    This project is currently distributed without an explicit license. If you intend to use or adapt this repository publicly, please consider adding an appropriate open-source license (such as MIT)
+No license has been chosen yet; all rights reserved by the author.

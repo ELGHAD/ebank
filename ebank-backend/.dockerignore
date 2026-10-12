@@ -3,3 +3,6 @@ target/
 .idea/
 *.iml
 .git
+# Local secrets must never end up in an image layer
+src/main/resources/application-local.yml
+src/main/resources/application.properties

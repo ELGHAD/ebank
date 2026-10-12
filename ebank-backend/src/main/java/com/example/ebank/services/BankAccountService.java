@@ -1,19 +1,18 @@
 package com.example.ebank.services;
 
-import com.example.ebank.dto.AddBankAccountRequest;
-import com.example.ebank.dto.AddBankAccountResponse;
-import com.example.ebank.entities.BankAccount;
-import org.springframework.security.core.Authentication;
+import com.example.ebank.config.AppUserPrincipal;
+import com.example.ebank.dto.AccountResponse;
+import com.example.ebank.dto.OpenAccountRequest;
 
 import java.util.List;
 
 public interface BankAccountService {
 
-    AddBankAccountResponse createAccount(AddBankAccountRequest req);
+    AccountResponse openAccount(AppUserPrincipal agent, OpenAccountRequest request);
 
-    // admin / get accounts for a specific client
-    List<BankAccount> getAccountsByClient(Long clientId);
+    // agent: accounts of a client of the agent's organization
+    List<AccountResponse> getAccountsOfClient(AppUserPrincipal agent, Long clientId);
 
-    // client / get my own accounts
-    List<BankAccount> getMyAccounts(Authentication authentication);
+    // client: the caller's own accounts
+    List<AccountResponse> getMyAccounts(AppUserPrincipal client);
 }

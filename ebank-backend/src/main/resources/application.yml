@@ -1,0 +1,47 @@
+# Committed configuration: no secrets here. Secrets come from environment variables
+# (Docker: .env file; local development: application-local.yml, see application-local.yml.example).
+spring:
+  application:
+    name: ebank-backend
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate # Flyway owns the schema (src/main/resources/db/migration)
+  flyway:
+    enabled: true
+
+server:
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+
+app:
+  jwt:
+    secret: ${APP_JWT_SECRET:}
+    expiration: ${APP_JWT_EXPIRATION:60m}
+    issuer: ebank
+  cors:
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
+  banking:
+    default-currency: MAD
+    supported-currencies: MAD,EUR,USD
+  demo:
+    organization-name: Demo Bank
+    agent-username: ${DEMO_AGENT_USERNAME:agent@demo.ebank.test}
+    agent-password: ${DEMO_AGENT_PASSWORD:}

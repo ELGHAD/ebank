@@ -24,7 +24,7 @@ const Navbar = () => {
     >
       <div>
         <strong>eBank</strong>
-        {auth.role === "AGENT_GUICHET" && (
+        {auth.role === "AGENT" && (
           <span style={{ marginLeft: 15 }}>
             <Link to="/admin">Admin</Link>
           </span>

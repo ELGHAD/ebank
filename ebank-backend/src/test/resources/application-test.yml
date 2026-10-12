@@ -1,0 +1,5 @@
+# Test-only settings. The datasource comes from the Testcontainers PostgreSQL container (@ServiceConnection).
+app:
+  jwt:
+    secret: test-only-secret-not-used-anywhere-else-0123456789
+    expiration: 15m

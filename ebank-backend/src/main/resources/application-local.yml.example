@@ -1,0 +1,14 @@
+# Local development without Docker.
+# Copy to application-local.yml (git-ignored) and run:
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=local,demo
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ebank
+    username: postgres
+    password: change-me
+
+app:
+  jwt:
+    secret: replace-with-output-of-openssl-rand-hex-32
+  demo:
+    agent-password: replace-with-a-demo-password

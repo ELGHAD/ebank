@@ -33,3 +33,4 @@ ebank-frontend/.env.production.local
 
 # Ignore nested git metadata
 **/.git
+ebank-backend/src/main/resources/application-local.yml

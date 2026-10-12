@@ -1,0 +1,22 @@
+# Weekly dependency update pull requests; CI must pass before any of them is merged.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /ebank-backend
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /ebank-frontend
+    schedule:
+      interval: weekly
+    groups:
+      dev-tooling:
+        dependency-type: development
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directories: [/ebank-backend, /ebank-frontend]
+    schedule:
+      interval: weekly

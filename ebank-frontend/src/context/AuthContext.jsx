@@ -1,62 +1,45 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { setUnauthorizedHandler } from "../api/axiosClient";
+import { clearSession, readSession, writeSession } from "./sessionStorage";
 
 const AuthContext = createContext(null);
 
-export const AuthProvider = ({ children }) => {
-  const [auth, setAuth] = useState({
-    isAuthenticated: false,
-    username: null,
-    role: null,
-    token: null,
-  });
+const primaryRole = (roles = []) => (roles.includes("AGENT") ? "AGENT" : roles[0] || null);
 
-  // Chargement initial depuis localStorage
-  useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    const username = localStorage.getItem("username");
-    const role = localStorage.getItem("role");
-
-    if (token && username && role) {
-      setAuth({
+const toAuthState = (session) =>
+  session?.token && session?.user
+    ? {
         isAuthenticated: true,
-        username,
-        role,
-        token,
-      });
-    }
+        token: session.token,
+        username: session.user.username,
+        roles: session.user.roles,
+        role: primaryRole(session.user.roles),
+      }
+    : { isAuthenticated: false, token: null, username: null, roles: [], role: null };
+
+export const AuthProvider = ({ children }) => {
+  // Read synchronously on first render so a page refresh does not bounce protected routes to /login
+  const [auth, setAuth] = useState(() => toAuthState(readSession()));
+
+  const login = useCallback(({ token, user }) => {
+    const session = { token, user };
+    writeSession(session);
+    setAuth(toAuthState(session));
   }, []);
 
-  const login = ({ token, username, role }) => {
-    localStorage.setItem("accessToken", token);
-    localStorage.setItem("username", username);
-    localStorage.setItem("role", role);
+  const logout = useCallback(() => {
+    clearSession();
+    setAuth(toAuthState(null));
+  }, []);
 
-    setAuth({
-      isAuthenticated: true,
-      username,
-      role,
-      token,
-    });
-  };
+  // Expired or revoked token: drop the session; ProtectedRoute then redirects to /login
+  useEffect(() => {
+    setUnauthorizedHandler(logout);
+    return () => setUnauthorizedHandler(() => {});
+  }, [logout]);
 
-  const logout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("username");
-    localStorage.removeItem("role");
-
-    setAuth({
-      isAuthenticated: false,
-      username: null,
-      role: null,
-      token: null,
-    });
-  };
-
-  return (
-    <AuthContext.Provider value={{ auth, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = useMemo(() => ({ auth, login, logout }), [auth, login, logout]);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => useContext(AuthContext);

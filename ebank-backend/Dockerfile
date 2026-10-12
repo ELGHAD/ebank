@@ -1,16 +1,22 @@
-FROM eclipse-temurin:17-jdk-jammy AS build
+FROM eclipse-temurin:21-jdk-jammy AS build
 WORKDIR /workspace/app
 
+# Dependencies first so they are cached between source changes
+COPY mvnw pom.xml ./
 COPY .mvn/ .mvn/
-COPY pom.xml ./
+RUN chmod +x mvnw && ./mvnw -B -q dependency:go-offline
+
 COPY src ./src
+RUN ./mvnw -B -q package -DskipTests
 
-RUN ./mvnw -B package -DskipTests
-
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
+RUN groupadd --system ebank && useradd --system --gid ebank --no-create-home ebank
 WORKDIR /app
-COPY --from=build /workspace/app/target/*.jar app.jar
+COPY --from=build /workspace/app/target/ebank-backend-*.jar app.jar
+USER ebank
 
 EXPOSE 8080
-ENV JAVA_OPTS=""
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=5 \
+  CMD curl -fsS http://localhost:8080/actuator/health/readiness || exit 1
+# JVM flags can be passed with the standard JAVA_TOOL_OPTIONS environment variable
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

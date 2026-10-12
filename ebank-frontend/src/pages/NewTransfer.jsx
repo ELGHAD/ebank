@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { createTransfer, getMyAccounts } from "../services/clientService";
 import { useNavigate } from "react-router-dom";
 
+// Transfers are not processed by the backend yet (Phase 2 adds the transfer engine).
+const TRANSFERS_AVAILABLE = false;
+
 export default function NewTransfer() {
   const navigate = useNavigate();
 
@@ -31,7 +34,7 @@ export default function NewTransfer() {
           setFromAccountId(list[0].id);
           setFromRib(list[0].rib);
         }
-      } catch (e) {
+      } catch {
         setErr("Cannot load accounts for transfer.");
       } finally {
         setLoadingAccounts(false);
@@ -48,7 +51,7 @@ export default function NewTransfer() {
 
   const canSubmit = useMemo(() => {
     const a = Number(amount);
-    return Boolean(fromRib && toRib && amount && !Number.isNaN(a) && a > 0);
+    return TRANSFERS_AVAILABLE && Boolean(fromRib && toRib && amount && !Number.isNaN(a) && a > 0);
   }, [fromRib, toRib, amount]);
 
   const onSubmit = async (e) => {
@@ -367,7 +370,16 @@ export default function NewTransfer() {
                 <span aria-hidden="true">🧾</span> Transfer form
               </div>
 
-              {err && <div className="alert alertError">{err}</div>}
+              {!TRANSFERS_AVAILABLE && (
+                <div className="alert" role="status">
+                  Transfers are not available yet in this version of the demo.
+                </div>
+              )}
+              {err && (
+                <div className="alert alertError" role="alert">
+                  {err}
+                </div>
+              )}
               {msg && <div className="alert alertOk">{msg}</div>}
 
               {loadingAccounts ? (
@@ -481,7 +493,7 @@ export default function NewTransfer() {
               )}
             </div>
 
-            <div className="footer">© 2025 eBank — Secure & Trusted</div>
+            <div className="footer">Banking simulation · synthetic data only</div>
           </div>
         </div>
       </div>

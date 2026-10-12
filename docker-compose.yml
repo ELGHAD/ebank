@@ -1,51 +1,48 @@
+# Local stack: PostgreSQL + Spring Boot API + React SPA behind Nginx.
+# Only the frontend is published to the host; the SPA reaches the API same-origin through Nginx (/api).
+# Values come from .env (copy .env.example). Required secrets stop `docker compose up` with a clear message.
 services:
   db:
-    image: mysql:8.1
-    container_name: ebank-db
+    image: postgres:18-alpine
     restart: unless-stopped
-    env_file: .env
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ebank}
+      POSTGRES_USER: ${POSTGRES_USER:-ebank}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
-      - ebank_db_data:/var/lib/mysql
-    ports:
-      - "3306:3306"
+      - ebank_db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   backend:
     build:
       context: ./ebank-backend
-      dockerfile: Dockerfile
-    container_name: ebank-backend
     restart: unless-stopped
     depends_on:
-      - db
-    env_file: .env
-    ports:
-      - "${BACKEND_PORT:-8080}:8080"
+      db:
+        condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/${MYSQL_DATABASE}?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
-      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
-      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
-      APP_JWT_SECRET: ${APP_JWT_SECRET}
-      APP_JWT_EXPIRATION: ${APP_JWT_EXPIRATION}
-      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-ebank}
+      DB_USERNAME: ${POSTGRES_USER:-ebank}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?Set APP_JWT_SECRET in .env (openssl rand -hex 32)}
+      APP_JWT_EXPIRATION: ${APP_JWT_EXPIRATION:-60m}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
+      DEMO_AGENT_USERNAME: ${DEMO_AGENT_USERNAME:-agent@demo.ebank.test}
+      DEMO_AGENT_PASSWORD: ${DEMO_AGENT_PASSWORD:-}
 
   frontend:
     build:
       context: ./ebank-frontend
-      dockerfile: Dockerfile
-      args:
-        REACT_APP_API_BASE_URL: ${REACT_APP_API_BASE_URL:-/api}
-    container_name: ebank-frontend
     restart: unless-stopped
     depends_on:
-      - backend
-    env_file: .env
+      backend:
+        condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${FRONTEND_PORT:-3000}:8080"
 
 volumes:
   ebank_db_data:

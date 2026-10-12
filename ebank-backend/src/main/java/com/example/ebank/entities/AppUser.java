@@ -3,32 +3,45 @@ package com.example.ebank.entities;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
 @Entity
 @Getter @Setter
-@NoArgsConstructor @AllArgsConstructor
+@NoArgsConstructor
 public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    /** Null only for future platform-level administrators. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Organization organization;
+
+    /** The user's email address, lower-cased. */
+    @Column(unique = true, nullable = false, length = 254)
     private String username;
 
-    private String password;
+    @Column(nullable = false, length = 100)
+    private String passwordHash;
 
-    @Column(unique = true)
-    private String email;
-
+    @Column(nullable = false)
     private boolean enabled = true;
+
+    @Column(nullable = false, updatable = false)
+    private Instant createdAt;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
-            name = "user_roles",
+            name = "user_role",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<AppRole> roles = new HashSet<>();
+
+    @PrePersist
+    void onCreate() {
+        createdAt = Instant.now();
+    }
 }

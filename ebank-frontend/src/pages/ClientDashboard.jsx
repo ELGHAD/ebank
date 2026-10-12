@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { getMyAccounts } from "../services/clientService";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { errorMessage } from "../api/errors";
 
 export default function ClientDashboard() {
   const [accounts, setAccounts] = useState([]);
@@ -8,6 +10,7 @@ export default function ClientDashboard() {
   const [loading, setLoading] = useState(true);
 
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   useEffect(() => {
     const load = async () => {
@@ -17,8 +20,7 @@ export default function ClientDashboard() {
         const res = await getMyAccounts();
         setAccounts(res.data || []);
       } catch (e) {
-        console.error(e);
-        setError("Cannot load accounts (check token / backend).");
+        setError(errorMessage(e, "Cannot load your accounts."));
       } finally {
         setLoading(false);
       }
@@ -26,15 +28,17 @@ export default function ClientDashboard() {
     load();
   }, []);
 
-  const totalBalance = useMemo(() => {
-    return (accounts || []).reduce(
-      (sum, a) => sum + Number(a?.balance || 0),
-      0
-    );
+  // Display-only aggregation per currency; amounts are never computed client-side for business purposes
+  const totalsByCurrency = useMemo(() => {
+    const totals = {};
+    for (const a of accounts) {
+      totals[a.currency] = (totals[a.currency] || 0) + Number(a.balance);
+    }
+    return Object.entries(totals);
   }, [accounts]);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    logout();
     navigate("/login");
   };
 
@@ -47,11 +51,8 @@ export default function ClientDashboard() {
   };
 
   const statusBadgeClass = (status) => {
-    const s = String(status || "").toLowerCase();
-    if (s.includes("active") || s.includes("open") || s.includes("enabled"))
-      return "badge badge-ok";
-    if (s.includes("blocked") || s.includes("closed") || s.includes("disabled"))
-      return "badge badge-bad";
+    if (status === "ACTIVE") return "badge badge-ok";
+    if (status === "BLOCKED" || status === "CLOSED") return "badge badge-bad";
     return "badge badge-neutral";
   };
 
@@ -366,7 +367,13 @@ export default function ClientDashboard() {
                 <div className="kpi">
                   <div className="kpiLabel">Total balance</div>
                   <div className="kpiValue money">
-                    {formatMoney(totalBalance)} MAD
+                    {totalsByCurrency.length === 0
+                      ? "-"
+                      : totalsByCurrency.map(([currency, total]) => (
+                          <div key={currency}>
+                            {formatMoney(total)} {currency}
+                          </div>
+                        ))}
                   </div>
                   <div className="kpiHint">Sum of all balances</div>
                 </div>
@@ -380,12 +387,16 @@ export default function ClientDashboard() {
                 </div>
               </div>
 
-              {error && <div className="error">{error}</div>}
+              {error && (
+                <div className="error" role="alert">
+                  {error}
+                </div>
+              )}
             </div>
 
             <div className="card">
               <div className="cardTitle">
-                <span aria-hidden="true">🛡️</span> Security
+                <span aria-hidden="true">ℹ️</span> About this demo
               </div>
               <div
                 style={{
@@ -394,11 +405,8 @@ export default function ClientDashboard() {
                   lineHeight: 1.6,
                 }}
               >
-                Your session uses a token-based authentication. If you see
-                errors, verify your token and backend availability.
-              </div>
-              <div className="footer" style={{ marginTop: 12 }}>
-                © 2025 eBank — Secure & Trusted
+                This is a banking simulation for demonstration purposes. All
+                accounts and balances are synthetic; no real money is involved.
               </div>
             </div>
           </div>
@@ -420,7 +428,8 @@ export default function ClientDashboard() {
                     <tr>
                       <th>ID</th>
                       <th>RIB</th>
-                      <th>Balance (MAD)</th>
+                      <th>Currency</th>
+                      <th>Balance</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -429,6 +438,7 @@ export default function ClientDashboard() {
                       <tr key={a.id}>
                         <td className="mono">{a.id}</td>
                         <td className="mono">{a.rib}</td>
+                        <td>{a.currency}</td>
                         <td className="money">{formatMoney(a.balance)}</td>
                         <td>
                           <span className={statusBadgeClass(a.status)}>

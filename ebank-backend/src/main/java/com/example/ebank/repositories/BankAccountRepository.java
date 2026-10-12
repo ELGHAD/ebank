@@ -7,10 +7,11 @@ import java.util.List;
 
 public interface BankAccountRepository extends JpaRepository<BankAccount, Long> {
 
-    // For admin / by client id (needs BankAccount.client.id)
-    List<BankAccount> findByClient_Id(Long clientId);
+    // Agent view, scoped to the agent's organization
+    List<BankAccount> findByClientIdAndOrganizationIdOrderByIdAsc(Long clientId, Long organizationId);
 
-    // For "my accounts" by authenticated username
-    // (needs BankAccount.client.appUser.username)
-    List<BankAccount> findByClient_AppUser_Username(String username);
+    // Client view: accounts owned by the authenticated user
+    List<BankAccount> findByClientAppUserIdOrderByIdAsc(Long appUserId);
+
+    boolean existsByRib(String rib);
 }
