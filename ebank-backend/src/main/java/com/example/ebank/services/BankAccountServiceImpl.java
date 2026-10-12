@@ -1,5 +1,7 @@
 package com.example.ebank.services;
 
+import com.example.ebank.audit.AuditEventType;
+import com.example.ebank.audit.AuditService;
 import com.example.ebank.banking.MoneyPolicy;
 import com.example.ebank.banking.Rib;
 import com.example.ebank.config.AppUserPrincipal;
@@ -30,6 +32,7 @@ public class BankAccountServiceImpl implements BankAccountService {
     private final ClientRepository clientRepository;
     private final MoneyPolicy moneyPolicy;
     private final LedgerService ledgerService;
+    private final AuditService audit;
 
     /**
      * The initial deposit is recorded as a DEPOSIT ledger entry in the same transaction,
@@ -53,6 +56,8 @@ public class BankAccountServiceImpl implements BankAccountService {
         if (initialDeposit.signum() > 0) {
             ledgerService.recordDeposit(account, initialDeposit, "Opening deposit");
         }
+        audit.record(agent, AuditEventType.ACCOUNT_OPENED, "account:" + account.getId(),
+                "client " + client.getId() + ", " + currency + " " + initialDeposit.toPlainString());
 
         return Mappers.toAccountResponse(account);
     }

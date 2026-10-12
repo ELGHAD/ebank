@@ -56,9 +56,13 @@ public class SecurityConfig {
             HttpSecurity http,
             @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) throws Exception {
         http
-                // Stateless bearer-token API: no cookies are used for authentication, so CSRF does not apply.
-                // To be revisited together with the token-storage change (Phase 3).
-                .csrf(csrf -> csrf.disable())
+                // Browsers authenticate with an HttpOnly cookie, so state-changing requests need a CSRF token:
+                // spa() = XSRF-TOKEN cookie readable by the SPA, echoed in the X-XSRF-TOKEN header (BREACH-safe).
+                // Requests carrying an Authorization header are exempt: browsers never add it on their own,
+                // so a cross-site page cannot forge such a request.
+                .csrf(csrf -> csrf
+                        .spa()
+                        .ignoringRequestMatchers(request -> request.getHeader("Authorization") != null))
                 .cors(Customizer.withDefaults())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
@@ -68,7 +72,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // Error dispatches must not be re-authorized, otherwise every error turns into 401/403
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/api/client/**").hasRole("CLIENT")
                         .requestMatchers("/api/admin/**").hasRole("AGENT")

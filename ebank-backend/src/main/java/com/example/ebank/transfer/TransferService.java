@@ -1,5 +1,7 @@
 package com.example.ebank.transfer;
 
+import com.example.ebank.audit.AuditEventType;
+import com.example.ebank.audit.AuditService;
 import com.example.ebank.banking.MoneyPolicy;
 import com.example.ebank.banking.Rib;
 import com.example.ebank.config.AppUserPrincipal;
@@ -51,6 +53,7 @@ public class TransferService {
     private final LedgerEntryRepository ledgerRepo;
     private final AppUserRepository userRepo;
     private final MoneyPolicy moneyPolicy;
+    private final AuditService audit;
 
     /** @param replayed true when the result is the original transfer of an idempotent retry */
     public record TransferResult(TransferResponse transfer, boolean replayed) {
@@ -136,6 +139,9 @@ public class TransferService {
         ledgerRepo.save(LedgerEntry.of(destination, transfer, LedgerEntryType.CREDIT, amount, description));
         ledgerRepo.flush();
 
+        audit.record(caller, AuditEventType.TRANSFER_COMPLETED, "transfer:" + transfer.getId(),
+                "account " + source.getId() + " -> account " + destination.getId() + ", "
+                        + amount.toPlainString() + " " + transfer.getCurrency());
         log.info("Transfer {} completed: account {} -> account {}, {} {}",
                 transfer.getId(), source.getId(), destination.getId(), amount, transfer.getCurrency());
         return new TransferResult(toResponse(transfer, source.getBalance()), false);

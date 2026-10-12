@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { Route } from "react-router-dom";
 import NewTransfer from "./NewTransfer";
 import * as clientService from "../services/clientService";
-import { clientSession, renderAt } from "../test/renderWithProviders";
+import { clientUser, renderAt } from "../test/renderWithProviders";
 
 const SOURCE = { id: 7, rib: "EB3777744714656519320252", currency: "MAD", balance: 500, status: "ACTIVE" };
 const RECIPIENT_RIB = "EB3094712094552729193874";
@@ -28,7 +28,7 @@ describe("NewTransfer", () => {
       data: { id: 42, sourceAccountId: 7, destinationRib: RECIPIENT_RIB, amount: 120.5, currency: "MAD", balanceAfter: 379.5 },
     });
     const user = userEvent.setup();
-    renderAt("/client/transfer", routes, clientSession);
+    renderAt("/client/transfer", routes, clientUser);
 
     await fillForm(user);
     await user.click(screen.getByRole("button", { name: "Review transfer" }));
@@ -47,7 +47,7 @@ describe("NewTransfer", () => {
   it("catches a mistyped RIB and an excessive amount before calling the server", async () => {
     const createTransfer = vi.spyOn(clientService, "createTransfer");
     const user = userEvent.setup();
-    renderAt("/client/transfer", routes, clientSession);
+    renderAt("/client/transfer", routes, clientUser);
 
     await fillForm(user, { rib: RECIPIENT_RIB.slice(0, -1) + "5", amount: "600" });
     await user.click(screen.getByRole("button", { name: "Review transfer" }));
@@ -64,7 +64,7 @@ describe("NewTransfer", () => {
         data: { id: 43, sourceAccountId: 7, destinationRib: RECIPIENT_RIB, amount: 120.5, currency: "MAD", balanceAfter: 379.5 },
       });
     const user = userEvent.setup();
-    renderAt("/client/transfer", routes, clientSession);
+    renderAt("/client/transfer", routes, clientUser);
 
     await fillForm(user);
     await user.click(screen.getByRole("button", { name: "Review transfer" }));
@@ -83,7 +83,7 @@ describe("NewTransfer", () => {
       response: { status: 422, data: { code: "INSUFFICIENT_FUNDS", detail: "Insufficient funds" } },
     });
     const user = userEvent.setup();
-    renderAt("/client/transfer", routes, clientSession);
+    renderAt("/client/transfer", routes, clientUser);
 
     await fillForm(user);
     await user.click(screen.getByRole("button", { name: "Review transfer" }));

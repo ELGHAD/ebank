@@ -27,7 +27,7 @@ class AccountHistoryIntegrationTest extends IntegrationTestSupport {
         org = newOrganization();
         agentToken = agentToken(org);
         OnboardedClient aliceClient = onboardClient(agentToken);
-        aliceToken = token(aliceClient.username(), aliceClient.temporaryPassword());
+        aliceToken = clientToken(aliceClient);
         alice = newAccount(agentToken, aliceClient.id(), "100.00");
         bob = newAccount(agentToken, onboardClient(agentToken).id(), "0");
 

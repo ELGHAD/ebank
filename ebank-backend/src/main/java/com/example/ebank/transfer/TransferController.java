@@ -4,7 +4,7 @@ import com.example.ebank.config.AppUserPrincipal;
 import com.example.ebank.exception.NotFoundException;
 import com.example.ebank.repositories.BankAccountRepository;
 import com.example.ebank.transfer.TransferDtos.LedgerEntryResponse;
-import com.example.ebank.transfer.TransferDtos.PageResponse;
+import com.example.ebank.dto.PageResponse;
 import com.example.ebank.transfer.TransferDtos.TransferRequest;
 import com.example.ebank.transfer.TransferDtos.TransferResponse;
 import jakarta.validation.Valid;

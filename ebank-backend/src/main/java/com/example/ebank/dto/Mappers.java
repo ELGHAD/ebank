@@ -16,7 +16,8 @@ public final class Mappers {
                 user.getId(),
                 user.getUsername(),
                 user.getRoles().stream().map(AppRole::getRoleName).sorted().toList(),
-                user.getOrganization() == null ? null : user.getOrganization().getId());
+                user.getOrganization() == null ? null : user.getOrganization().getId(),
+                user.isMustChangePassword());
     }
 
     public static ClientResponse toClientResponse(Client client) {

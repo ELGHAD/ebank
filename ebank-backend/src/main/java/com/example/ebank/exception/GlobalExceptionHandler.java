@@ -1,5 +1,6 @@
 package com.example.ebank.exception;
 
+import com.example.ebank.config.AppUserPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -7,7 +8,10 @@ import org.springframework.http.*;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AccountStatusException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -33,6 +37,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(ex.getStatus(), ex.getCode(), ex.getMessage());
     }
 
+    @ExceptionHandler(TooManyAttemptsException.class)
+    ResponseEntity<ProblemDetail> handleTooManyAttempts(TooManyAttemptsException ex) {
+        long seconds = Math.max(1, ex.getRetryAfter().toSeconds() + 1);
+        ResponseEntity<ProblemDetail> response = problem(ex.getStatus(), ex.getCode(), ex.getMessage());
+        return ResponseEntity.status(response.getStatusCode())
+                .headers(response.getHeaders())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(seconds))
+                .body(response.getBody());
+    }
+
     @ExceptionHandler({BadCredentialsException.class, AccountStatusException.class})
     ResponseEntity<ProblemDetail> handleLoginFailure(AuthenticationException ex) {
         // Same answer for unknown user, wrong password and disabled account: no account enumeration.
@@ -46,6 +60,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex) {
+        if (ex instanceof CsrfException) {
+            return problem(HttpStatus.FORBIDDEN, "CSRF_TOKEN_INVALID", "Missing or invalid CSRF token");
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof AppUserPrincipal principal && principal.passwordChangeRequired()) {
+            return problem(HttpStatus.FORBIDDEN, "PASSWORD_CHANGE_REQUIRED",
+                    "You must change your temporary password before continuing");
+        }
         return problem(HttpStatus.FORBIDDEN, "FORBIDDEN", "You are not allowed to perform this action");
     }
 

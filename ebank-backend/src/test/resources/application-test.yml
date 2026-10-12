@@ -1,5 +1,9 @@
-# Test-only settings. The datasource comes from the Testcontainers PostgreSQL container (@ServiceConnection).
+# Test-only settings. The datasource comes from the Testcontainers PostgreSQL container (TestcontainersConfiguration).
 app:
   jwt:
     secret: test-only-secret-not-used-anywhere-else-0123456789
     expiration: 15m
+  # Every MockMvc request comes from 127.0.0.1: a per-IP limit would leak between unrelated tests.
+  # The IP limit is covered by LoginThrottleTest with a controllable clock.
+  login-throttle:
+    max-failures-per-ip: 100000

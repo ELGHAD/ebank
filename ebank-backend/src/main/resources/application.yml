@@ -13,9 +13,16 @@ spring:
       ddl-auto: validate # Flyway owns the schema (src/main/resources/db/migration)
   flyway:
     enabled: true
+    # Migrations run as the schema owner; the application itself may connect with a less privileged role
+    user: ${FLYWAY_USER:${spring.datasource.username}}
+    password: ${FLYWAY_PASSWORD:${spring.datasource.password}}
+    placeholders:
+      appDbUser: ${spring.datasource.username}
 
 server:
   shutdown: graceful
+  # Behind Nginx: take the client IP from X-Forwarded-For, trusting only private-network proxies
+  forward-headers-strategy: native
   error:
     include-stacktrace: never
     include-message: never
@@ -36,6 +43,13 @@ app:
     secret: ${APP_JWT_SECRET:}
     expiration: ${APP_JWT_EXPIRATION:60m}
     issuer: ebank
+  cookie:
+    # Browsers accept Secure cookies on http://localhost; set to false only for plain-HTTP non-localhost hosts
+    secure: ${APP_COOKIE_SECURE:true}
+  login-throttle:
+    max-failures-per-username: 5
+    max-failures-per-ip: 20
+    window: 15m
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
   banking:

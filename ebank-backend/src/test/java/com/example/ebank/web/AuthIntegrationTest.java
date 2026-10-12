@@ -16,12 +16,13 @@ class AuthIntegrationTest extends IntegrationTestSupport {
 
         login(agent, AGENT_PASSWORD)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.accessToken", not(emptyString())))
-                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.accessToken").doesNotExist())
+                .andExpect(cookie().exists("EBANK_SESSION"))
                 .andExpect(jsonPath("$.expiresIn").value(900)) // 15m from application-test.yml
                 .andExpect(jsonPath("$.user.username").value(agent))
                 .andExpect(jsonPath("$.user.roles", contains("AGENT")))
-                .andExpect(content().string(not(containsString("password"))));
+                .andExpect(content().string(not(containsString("\"password\""))))
+                .andExpect(content().string(not(containsString("$2a$"))));
     }
 
     @Test

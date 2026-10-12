@@ -90,7 +90,7 @@ class BankAccountIntegrationTest extends IntegrationTestSupport {
         openAccount(agentToken, alice.id(), "\"initialDeposit\": 0.1").andExpect(status().isCreated());
         openAccount(agentToken, bob.id(), "\"initialDeposit\": 999").andExpect(status().isCreated());
 
-        getWithToken("/api/client/accounts", token(alice.username(), alice.temporaryPassword()))
+        getWithToken("/api/client/accounts", clientToken(alice))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)))
                 .andExpect(jsonPath("$[*].clientId", everyItem(is((int) alice.id()))))

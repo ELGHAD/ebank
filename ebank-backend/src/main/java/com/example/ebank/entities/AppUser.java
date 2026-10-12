@@ -29,6 +29,14 @@ public class AppUser {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    /** Must be changed before any banking operation (set for clients onboarded with a one-time password). */
+    @Column(nullable = false)
+    private boolean mustChangePassword = false;
+
+    /** Embedded in issued tokens; incrementing it revokes every token issued before (logout, password change). */
+    @Column(nullable = false)
+    private int tokenVersion = 0;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 

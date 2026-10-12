@@ -16,6 +16,7 @@ A full-stack banking **simulation** built with Spring Boot and React. Agents onb
 | Transfers to any account of the same bank (by RIB), with review/confirm step | Working, tested (incl. concurrency on real PostgreSQL) |
 | Append-only ledger, paginated and filterable account history | Working, tested |
 | Multi-tenant administration, plans and quotas | Planned |
+| Security hardening: HttpOnly cookie sessions + CSRF, revocation, forced first-login password change, login throttling, CSP, audit trail, least-privilege DB role | Working, tested (incl. a real-browser run) |
 | Cloud deployment | Not deployed |
 
 The full plan, with acceptance criteria, is in [docs/ROADMAP.md](docs/ROADMAP.md). The initial audit is in [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md), and design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
@@ -37,6 +38,14 @@ flowchart LR
   - Constraints enforce non-negative balances and same-organization ownership.
   - Triggers make transfers and ledger entries append-only.
 - **Frontend:** React 19 + React Router, built with Vite. The API is called same-origin (`/api`).
+- **Security:**
+  - The session is an `HttpOnly`, `SameSite=Strict` cookie, with CSRF double-submit protection.
+  - Logout and password change revoke every session.
+  - Clients must replace their one-time password before banking.
+  - Logins are throttled.
+  - Nginx sends a strict Content-Security-Policy.
+  - Security and business events go to an append-only audit trail.
+  - The application connects with a database role that cannot change the schema or rewrite the ledger and audit history.
 
 ### How a transfer is processed
 
@@ -80,11 +89,14 @@ cp .env.example .env        # Windows: copy .env.example .env
 docker compose up --build -d --wait
 ```
 
+> **Upgrading from an earlier checkout?** Since Phase 3 the database volume must be created with the restricted application role: run `docker compose down -v` once. This deletes the demo data.
+
 Open http://localhost:3000 and sign in as the demo agent, `agent@demo.ebank.test`, with the `DEMO_AGENT_PASSWORD` from your `.env`. As the agent:
 1. Onboard a client. The response shows the client's **one-time password**, once.
 2. Open an account for that client.
 3. Open a second account (same currency) for another client.
-4. Log out and sign in as the first client: make a transfer to the second account's RIB, then open the account history.
+4. Log out and sign in as the first client with the one-time password. You are asked to choose your own password.
+5. Make a transfer to the second account's RIB, then open the account history.
 
 Stop with `docker compose down`. Add `-v` to also delete the database volume.
 
@@ -118,7 +130,9 @@ CI runs the same commands on every push and pull request (`.github/workflows/ci.
 
 | Variable | Used by | Purpose |
 |---|---|---|
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | db, backend | Database name and credentials |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | db, backend | Database name and schema-owner credentials (used by Flyway only) |
+| `APP_DB_USER`, `APP_DB_PASSWORD` | db, backend | Restricted role the application connects with |
+| `APP_COOKIE_SECURE` | backend | `true` by default (browsers accept Secure cookies on http://localhost) |
 | `APP_JWT_SECRET` | backend | HMAC key; **at least 32 bytes**, the app refuses to start otherwise |
 | `APP_JWT_EXPIRATION` | backend | Token lifetime, e.g. `60m` |
 | `SPRING_PROFILES_ACTIVE` | backend | `demo` seeds the demo agent |
@@ -131,8 +145,12 @@ Secrets live only in `.env` / `application-local.yml`, both git-ignored. `VITE_*
 
 | Method & path | Role | Description |
 |---|---|---|
-| `POST /api/auth/login` | public | `{username, password}` → `{accessToken, tokenType, expiresIn, user}` |
-| `GET /api/auth/me` | any | Current user (id, username, roles, organization) |
+| `GET /api/auth/csrf` | public | Sets the `XSRF-TOKEN` cookie (call once before any POST) |
+| `POST /api/auth/login` | public | `{username, password}` → `{expiresIn, user}`; sets the `EBANK_SESSION` HttpOnly cookie. 429 when throttled |
+| `GET /api/auth/me` | any | Current user (id, username, roles, organization, `passwordChangeRequired`) |
+| `POST /api/auth/password` | any | `{currentPassword, newPassword}`; revokes other sessions, sets a new cookie |
+| `POST /api/auth/logout` | any | Revokes all the user's sessions and clears the cookie |
+| `GET /api/admin/audit-events` | AGENT | Audit trail of the agent's organization (`page`, `size`, `type`) |
 | `POST /api/admin/clients` | AGENT | Onboard a client → client, username, one-time password |
 | `POST /api/admin/accounts` | AGENT | `{clientId, currency?, initialDeposit?}` → account with generated RIB |
 | `GET /api/admin/clients/{id}/accounts` | AGENT | Accounts of a client of the agent's organization |
@@ -144,12 +162,15 @@ Secrets live only in `.env` / `application-local.yml`, both git-ignored. `VITE_*
 
 Errors use the `application/problem+json` format, for example `{"status":409,"code":"EMAIL_TAKEN","detail":"..."}`.
 
+Browsers authenticate with the session cookie, and every POST needs the `X-XSRF-TOKEN` header. Scripts and API clients can instead send `Authorization: Bearer <token>` (the token is the cookie's value), which needs no CSRF token.
+
 ## Known limitations
 
 - Agents have no client search or account list in the UI yet (they need the numeric client id).
 - No transfer reversals, scheduled transfers or FX; transfers are same-currency only.
-- The JWT is stored in `localStorage`; moving it to an HttpOnly cookie with CSRF protection is planned (ADR-008). There is no rate limiting on login yet.
-- Clients are not yet forced to change their one-time password.
+- Login throttling is in memory (per instance, reset on restart). There is no refresh token: users sign in again when the session expires (60 minutes by default).
+- Locally there is no HTTPS (and therefore no HSTS); that belongs to the deployment's TLS entry point.
+- Agents have no UI for the audit trail yet (API only).
 - Single seeded organization; organization management comes later.
 
 ## License

@@ -7,6 +7,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import ClientDashboard from "./pages/ClientDashboard";
 import NewTransfer from "./pages/NewTransfer";
 import AccountHistory from "./pages/AccountHistory";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -54,6 +55,16 @@ const App = () => {
             element={
               <ProtectedRoute requiredRole="CLIENT">
                 <AccountHistory />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Any signed-in user */}
+          <Route
+            path="/change-password"
+            element={
+              <ProtectedRoute>
+                <ChangePasswordPage />
               </ProtectedRoute>
             }
           />

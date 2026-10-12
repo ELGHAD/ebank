@@ -31,14 +31,22 @@ class JwtServiceTest {
     void tokenRoundTrip() {
         JwtService service = new JwtService(new JwtProperties(SECRET, Duration.ofHours(1), "ebank"));
         String token = service.generateToken(user("alice@test.ebank"));
-        assertThat(service.validateAndGetUsername(token)).contains("alice@test.ebank");
+        assertThat(service.validate(token)).contains(new JwtService.TokenClaims("alice@test.ebank", 0));
+    }
+
+    @Test
+    void tokenCarriesTheUsersTokenVersion() {
+        JwtService service = new JwtService(new JwtProperties(SECRET, Duration.ofHours(1), "ebank"));
+        AppUser user = user("alice@test.ebank");
+        user.setTokenVersion(7);
+        assertThat(service.validate(service.generateToken(user)).orElseThrow().version()).isEqualTo(7);
     }
 
     @Test
     void expiredTokenIsRejected() {
         JwtService service = new JwtService(new JwtProperties(SECRET, Duration.ofSeconds(-1), "ebank"));
         String token = service.generateToken(user("alice@test.ebank"));
-        assertThat(service.validateAndGetUsername(token)).isEmpty();
+        assertThat(service.validate(token)).isEmpty();
     }
 
     @Test
@@ -47,8 +55,8 @@ class JwtServiceTest {
         JwtService otherKey = new JwtService(new JwtProperties(SECRET.replace('0', 'x'), Duration.ofHours(1), "ebank"));
         JwtService otherIssuer = new JwtService(new JwtProperties(SECRET, Duration.ofHours(1), "someone-else"));
 
-        assertThat(ours.validateAndGetUsername(otherKey.generateToken(user("a@test.ebank")))).isEmpty();
-        assertThat(ours.validateAndGetUsername(otherIssuer.generateToken(user("a@test.ebank")))).isEmpty();
-        assertThat(ours.validateAndGetUsername("garbage")).isEmpty();
+        assertThat(ours.validate(otherKey.generateToken(user("a@test.ebank")))).isEmpty();
+        assertThat(ours.validate(otherIssuer.generateToken(user("a@test.ebank")))).isEmpty();
+        assertThat(ours.validate("garbage")).isEmpty();
     }
 }

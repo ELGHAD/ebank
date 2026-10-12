@@ -2,7 +2,7 @@ package com.example.ebank.transfer;
 
 import com.example.ebank.entities.BankAccount;
 import com.example.ebank.transfer.TransferDtos.LedgerEntryResponse;
-import com.example.ebank.transfer.TransferDtos.PageResponse;
+import com.example.ebank.dto.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

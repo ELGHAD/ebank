@@ -1,0 +1,13 @@
+package com.example.ebank.audit;
+
+public enum AuditEventType {
+    LOGIN_SUCCEEDED,
+    LOGIN_FAILED,
+    LOGIN_THROTTLED,
+    LOGOUT,
+    PASSWORD_CHANGED,
+    PASSWORD_CHANGE_FAILED,
+    CLIENT_ONBOARDED,
+    ACCOUNT_OPENED,
+    TRANSFER_COMPLETED
+}

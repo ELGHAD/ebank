@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { Route } from "react-router-dom";
 import AccountHistory from "./AccountHistory";
 import * as clientService from "../services/clientService";
-import { clientSession, renderAt } from "../test/renderWithProviders";
+import { clientUser, renderAt } from "../test/renderWithProviders";
 
 const routes = <Route path="/client/accounts/:accountId" element={<AccountHistory />} />;
 
@@ -31,7 +31,7 @@ describe("AccountHistory", () => {
 
   it("shows the movements returned by the backend", async () => {
     vi.spyOn(clientService, "getAccountEntries").mockResolvedValue(page([debit, deposit], 0, 1, 2));
-    renderAt("/client/accounts/5", routes, clientSession);
+    renderAt("/client/accounts/5", routes, clientUser);
 
     const rows = await screen.findAllByRole("row");
     expect(rows).toHaveLength(3); // header + 2
@@ -44,7 +44,7 @@ describe("AccountHistory", () => {
   it("paginates and filters through the API", async () => {
     const getEntries = vi.spyOn(clientService, "getAccountEntries").mockResolvedValue(page([debit], 0, 2, 11));
     const user = userEvent.setup();
-    renderAt("/client/accounts/5", routes, clientSession);
+    renderAt("/client/accounts/5", routes, clientUser);
 
     await user.click(await screen.findByRole("button", { name: "Next" }));
     expect(getEntries).toHaveBeenLastCalledWith("5", { page: 1, size: 10, type: undefined });
@@ -55,7 +55,7 @@ describe("AccountHistory", () => {
 
   it("shows an empty state", async () => {
     vi.spyOn(clientService, "getAccountEntries").mockResolvedValue(page([], 0, 0, 0));
-    renderAt("/client/accounts/5", routes, clientSession);
+    renderAt("/client/accounts/5", routes, clientUser);
     expect(await screen.findByText("No movements to show.")).toBeInTheDocument();
   });
 
@@ -63,7 +63,7 @@ describe("AccountHistory", () => {
     vi.spyOn(clientService, "getAccountEntries").mockRejectedValue({
       response: { status: 404, data: { code: "ACCOUNT_NOT_FOUND", detail: "Account not found" } },
     });
-    renderAt("/client/accounts/99", routes, clientSession);
+    renderAt("/client/accounts/99", routes, clientUser);
     expect(await screen.findByRole("alert")).toHaveTextContent("Account not found");
   });
 });

@@ -38,7 +38,7 @@ class TransferIntegrationTest extends IntegrationTestSupport {
         org = newOrganization();
         agentToken = agentToken(org);
         alice = onboardClient(agentToken);
-        aliceToken = token(alice.username(), alice.temporaryPassword());
+        aliceToken = clientToken(alice);
         OnboardedClient bob = onboardClient(agentToken);
         aliceMad = newAccount(agentToken, alice.id(), "1000.00");
         bobMad = newAccount(agentToken, bob.id(), "50.00");
@@ -234,7 +234,7 @@ class TransferIntegrationTest extends IntegrationTestSupport {
     void sameKeyFromDifferentUsersAreIndependentTransfers() throws Exception {
         OnboardedClient bob = onboardClient(agentToken);
         AccountInfo bobOwn = newAccount(agentToken, bob.id(), "10");
-        String bobToken = token(bob.username(), bob.temporaryPassword());
+        String bobToken = clientToken(bob);
         String key = UUID.randomUUID().toString();
 
         transfer(aliceToken, key, aliceMad.id(), bobMad.rib(), "1").andExpect(status().isCreated());
@@ -258,15 +258,23 @@ class TransferIntegrationTest extends IntegrationTestSupport {
         assertBooksBalanced();
     }
 
-    // The ledger cannot be rewritten, even by code that bypasses the application
+    // The ledger cannot be rewritten, even by code that bypasses the application. Two independent layers:
     @Test
     void ledgerAndTransfersAreAppendOnlyInTheDatabase() throws Exception {
         transfer(aliceMad.id(), bobMad.rib(), "5").andExpect(status().isCreated());
 
+        // 1. The application's database role has no UPDATE/DELETE privilege on these tables
         assertThatThrownBy(() -> jdbc.update("update ledger_entry set amount = 1 where account_id = ?", aliceMad.id()))
-                .hasMessageContaining("append-only");
+                .rootCause().hasMessageContaining("permission denied");
         assertThatThrownBy(() -> jdbc.update("delete from transfer where source_account_id = ?", aliceMad.id()))
-                .hasMessageContaining("append-only");
+                .rootCause().hasMessageContaining("permission denied");
+
+        // 2. Even the schema owner is stopped by the append-only triggers
+        var owner = ownerJdbc();
+        assertThatThrownBy(() -> owner.update("update ledger_entry set amount = 1 where account_id = ?", aliceMad.id()))
+                .rootCause().hasMessageContaining("append-only");
+        assertThatThrownBy(() -> owner.update("delete from transfer where source_account_id = ?", aliceMad.id()))
+                .rootCause().hasMessageContaining("append-only");
     }
 
     private void setStatus(long accountId, AccountStatus status) {

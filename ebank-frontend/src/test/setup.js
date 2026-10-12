@@ -8,5 +8,4 @@ configure({ asyncUtilTimeout: 5000 });
 // Testing Library only auto-cleans when test globals are enabled; register it explicitly.
 afterEach(() => {
   cleanup();
-  localStorage.clear();
 });

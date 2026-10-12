@@ -7,10 +7,15 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ebank}
+      # Schema owner: used only by Flyway migrations
       POSTGRES_USER: ${POSTGRES_USER:-ebank}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      # Restricted role the application connects with (created by the init script on first start)
+      APP_DB_USER: ${APP_DB_USER:-ebank_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
     volumes:
       - ebank_db_data:/var/lib/postgresql
+      - ./docker/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
@@ -26,8 +31,10 @@ services:
         condition: service_healthy
     environment:
       DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-ebank}
-      DB_USERNAME: ${POSTGRES_USER:-ebank}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      DB_USERNAME: ${APP_DB_USER:-ebank_app}
+      DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD in .env}
+      FLYWAY_USER: ${POSTGRES_USER:-ebank}
+      FLYWAY_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       APP_JWT_SECRET: ${APP_JWT_SECRET:?Set APP_JWT_SECRET in .env (openssl rand -hex 32)}
       APP_JWT_EXPIRATION: ${APP_JWT_EXPIRATION:-60m}
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}

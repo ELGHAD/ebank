@@ -1,7 +1,9 @@
 package com.example.ebank.dto;
 
 /**
- * @param expiresIn token lifetime in seconds
+ * The token itself is not in the body: it is set as an HttpOnly cookie, out of reach of page scripts.
+ *
+ * @param expiresIn session lifetime in seconds
  */
-public record LoginResponse(String accessToken, String tokenType, long expiresIn, UserResponse user) {
+public record LoginResponse(long expiresIn, UserResponse user) {
 }

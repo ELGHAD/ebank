@@ -1,9 +1,9 @@
 import React from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { screen } from "@testing-library/react";
 import { Route } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
-import { agentSession, clientSession, renderAt } from "../test/renderWithProviders";
+import { agentUser, clientUser, renderAt } from "../test/renderWithProviders";
 
 const adminRoute = (
   <Route
@@ -17,22 +17,26 @@ const adminRoute = (
 );
 
 describe("ProtectedRoute", () => {
-  afterEach(() => localStorage.clear());
-
-  it("redirects anonymous visitors to the login page", () => {
+  it("redirects anonymous visitors to the login page", async () => {
     renderAt("/admin", adminRoute);
-    expect(screen.getByText("Login page")).toBeInTheDocument();
+    expect(await screen.findByText("Login page")).toBeInTheDocument();
   });
 
-  // Regression for audit F-1: a page refresh on a protected route bounced to /login
-  it("restores a stored session on first render (page refresh)", () => {
-    renderAt("/admin", adminRoute, agentSession);
-    expect(screen.getByText("Admin area")).toBeInTheDocument();
+  // Regression for audit F-1: a page refresh must restore the session (now from the cookie, via /api/auth/me)
+  it("waits for the session to be restored instead of bouncing to login", async () => {
+    renderAt("/admin", adminRoute, agentUser);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading");
+    expect(await screen.findByText("Admin area")).toBeInTheDocument();
   });
 
-  it("shows a not-authorized message for the wrong role", () => {
-    renderAt("/admin", adminRoute, clientSession);
-    expect(screen.getByRole("alert")).toHaveTextContent("not authorized");
+  it("shows a not-authorized message for the wrong role", async () => {
+    renderAt("/admin", adminRoute, clientUser);
+    expect(await screen.findByRole("alert")).toHaveTextContent("not authorized");
     expect(screen.queryByText("Admin area")).not.toBeInTheDocument();
+  });
+
+  it("sends a user with a temporary password to the password change page", async () => {
+    renderAt("/admin", adminRoute, { ...agentUser, passwordChangeRequired: true });
+    expect(await screen.findByText("Change password page")).toBeInTheDocument();
   });
 });

@@ -1,5 +1,7 @@
 package com.example.ebank.services;
 
+import com.example.ebank.audit.AuditEventType;
+import com.example.ebank.audit.AuditService;
 import com.example.ebank.config.AppUserPrincipal;
 import com.example.ebank.dto.Mappers;
 import com.example.ebank.dto.OnboardClientRequest;
@@ -33,6 +35,7 @@ public class ClientServiceImpl implements ClientService {
     private final AppRoleRepository roleRepo;
     private final OrganizationRepository organizationRepo;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService audit;
 
     /**
      * Creates the login identity and the client record in one transaction: if any step fails, nothing is kept.
@@ -59,6 +62,7 @@ public class ClientServiceImpl implements ClientService {
         user.setUsername(username);
         user.setPasswordHash(passwordEncoder.encode(temporaryPassword));
         user.setEnabled(true);
+        user.setMustChangePassword(true); // the agent has seen this password
         user.getRoles().add(roleRepo.findByRoleName(AppRole.CLIENT).orElseThrow());
         userRepo.save(user);
 
@@ -71,6 +75,7 @@ public class ClientServiceImpl implements ClientService {
         client.setBirthDate(req.birthDate());
         client.setAddress(req.address());
         clientRepo.saveAndFlush(client);
+        audit.record(agent, AuditEventType.CLIENT_ONBOARDED, "client:" + client.getId(), null);
 
         return new OnboardClientResponse(Mappers.toClientResponse(client), username, temporaryPassword);
     }

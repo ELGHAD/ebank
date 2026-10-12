@@ -1,42 +1,58 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { setUnauthorizedHandler } from "../api/axiosClient";
-import { clearSession, readSession, writeSession } from "./sessionStorage";
+import api, { setUnauthorizedHandler } from "../api/axiosClient";
 
 const AuthContext = createContext(null);
 
 const primaryRole = (roles = []) => (roles.includes("AGENT") ? "AGENT" : roles[0] || null);
 
-const toAuthState = (session) =>
-  session?.token && session?.user
-    ? {
-        isAuthenticated: true,
-        token: session.token,
-        username: session.user.username,
-        roles: session.user.roles,
-        role: primaryRole(session.user.roles),
-      }
-    : { isAuthenticated: false, token: null, username: null, roles: [], role: null };
+/**
+ * status: "loading" while the session is being restored, then "authenticated" or "anonymous".
+ * Nothing is stored in the browser: the session lives in an HttpOnly cookie and is restored with /api/auth/me.
+ */
+const toAuthState = (user, status = user ? "authenticated" : "anonymous") => ({
+  status,
+  isAuthenticated: Boolean(user),
+  user,
+  username: user?.username ?? null,
+  roles: user?.roles ?? [],
+  role: primaryRole(user?.roles),
+  passwordChangeRequired: Boolean(user?.passwordChangeRequired),
+});
 
 export const AuthProvider = ({ children }) => {
-  // Read synchronously on first render so a page refresh does not bounce protected routes to /login
-  const [auth, setAuth] = useState(() => toAuthState(readSession()));
+  const [auth, setAuth] = useState(() => toAuthState(null, "loading"));
 
-  const login = useCallback(({ token, user }) => {
-    const session = { token, user };
-    writeSession(session);
-    setAuth(toAuthState(session));
+  // Startup: obtain the CSRF cookie, then ask the backend whether the session cookie is still valid
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get("/api/auth/csrf")
+      .catch(() => {})
+      .then(() => api.get("/api/auth/me"))
+      .then((res) => !cancelled && setAuth(toAuthState(res.data)))
+      .catch(() => !cancelled && setAuth(toAuthState(null)));
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const logout = useCallback(() => {
-    clearSession();
+  /** After a successful login or password change: the backend has set the cookie, we keep the user. */
+  const login = useCallback((user) => setAuth(toAuthState(user)), []);
+
+  const logout = useCallback(async () => {
+    try {
+      await api.post("/api/auth/logout"); // revokes the session server-side and clears the cookie
+    } catch {
+      // The local state is cleared anyway
+    }
     setAuth(toAuthState(null));
   }, []);
 
-  // Expired or revoked token: drop the session; ProtectedRoute then redirects to /login
+  // Expired or revoked session: forget the user; ProtectedRoute then redirects to /login
   useEffect(() => {
-    setUnauthorizedHandler(logout);
+    setUnauthorizedHandler(() => setAuth(toAuthState(null)));
     return () => setUnauthorizedHandler(() => {});
-  }, [logout]);
+  }, []);
 
   const value = useMemo(() => ({ auth, login, logout }), [auth, login, logout]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

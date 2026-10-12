@@ -8,7 +8,6 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.List;
 
 /** Request and response payloads of the transfer and ledger API. */
 public final class TransferDtos {
@@ -39,9 +38,5 @@ public final class TransferDtos {
     public record LedgerEntryResponse(Long id, LedgerEntryType type, BigDecimal amount, BigDecimal balanceAfter,
                                       String description, Long transferId, String counterpartyRib,
                                       Instant createdAt) {
-    }
-
-    /** Stable JSON shape for paginated results (instead of serializing Spring's Page implementation). */
-    public record PageResponse<T>(List<T> content, int page, int size, long totalElements, int totalPages) {
     }
 }

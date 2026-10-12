@@ -95,7 +95,7 @@ class ClientOnboardingIntegrationTest extends IntegrationTestSupport {
     @Test
     void clientCannotOnboardClients() throws Exception {
         OnboardedClient client = onboardClient(agentToken(newOrganization()));
-        postClient(token(client.username(), client.temporaryPassword()), unique("ID"), unique("x") + "@test.ebank")
+        postClient(clientToken(client), unique("ID"), unique("x") + "@test.ebank")
                 .andExpect(status().isForbidden());
     }
 

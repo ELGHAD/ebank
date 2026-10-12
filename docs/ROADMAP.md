@@ -36,6 +36,8 @@ Phases follow the audit ([PROJECT_AUDIT.md](PROJECT_AUDIT.md), §13). A phase is
 | Frontend auth defects F-1/F-2/F-3 fixed | ✅ | `ProtectedRoute.test`, `ClientDashboard.test`, `axiosClient.test` |
 | GitHub Actions CI | ⚠️ written, **not yet run on GitHub** | `actionlint` passes; first push will tell |
 
+> **Correction (found in Phase 3):** the Docker "end-to-end" checks of Phases 1 and 2 used curl, which sends no `Origin` header. In a real browser, every POST through Nginx (including login) was rejected with `403 Invalid CORS request`, because Nginx forwarded `Host` without the port. Fixed in Phase 3 and verified with headless Chrome (ADR-008).
+
 Not done in Phase 1 (by design, see Phase 2+): transfers, history, CSP, cookie-based tokens, rate limiting, password change, OpenAPI.
 
 ## Phase 2 — Transfer engine ✅ (2026-10-12)
@@ -58,13 +60,30 @@ Not done in Phase 1 (by design, see Phase 2+): transfers, history, CSP, cookie-b
 
 Not verified: behaviour in a real browser (the flows were exercised over HTTP and with component tests), and CI on GitHub (not pushed yet).
 
+## Phase 3 — Security hardening ✅ (2026-10-12)
+
+| Acceptance criterion | Result | Evidence |
+|---|---|---|
+| JWT in an HttpOnly / Secure / SameSite=Strict cookie; no token in the body or browser storage | ✅ | `SessionCookieIntegrationTest`; headless Chrome: `document.cookie` has no session cookie, `localStorage` empty |
+| CSRF protection on every state-changing browser request, login included | ✅ | `SessionCookieIntegrationTest` (403 `CSRF_TOKEN_INVALID` without the token); axios test through its real XHR adapter |
+| Bearer clients exempt from CSRF without a cookie fallback | ✅ | `invalidBearerHeaderNeverFallsBackToTheCookie`; mutation check |
+| Logout and password change revoke sessions on all devices | ✅ | `SessionCookieIntegrationTest`, `PasswordChangeIntegrationTest`; mutation check (ignoring the token version breaks both) |
+| Forced password change for one-time passwords, enforced server-side | ✅ | `PasswordChangeIntegrationTest` (403 `PASSWORD_CHANGE_REQUIRED`); mutation check; browser: the redirect cannot be bypassed by URL |
+| Login throttling (username and IP), 429 + Retry-After, spoof-resistant client IP | ✅ | `LoginThrottleIntegrationTest`, `LoginThrottleTest` (controlled clock); Docker: spoofed `X-Forwarded-For` ignored |
+| Audit trail: events recorded, tenant-scoped, append-only, no secrets | ✅ | `AuditAndPrivilegeIntegrationTest` |
+| Least-privilege DB role (no DDL, no rewrite of ledger/transfers/audit) | ✅ | Whole suite runs as `ebank_app`; dedicated privilege test; Docker: `ebank_app` has only INSERT/SELECT on `ledger_entry` |
+| CSP and security headers | ✅ | Nginx snippet; headless Chrome: no CSP violations and no unexpected console errors across the full scenario |
+| Real-browser end-to-end scenario | ✅ | Headless Chrome, 14/14 checks: agent onboarding → forced password change → transfer → history → reload → logout |
+| Backend / frontend suites | ✅ | 143 backend tests, 0 failures (as `ebank_app`); 27 frontend tests, stable over 3 runs; lint and build OK |
+
+Not done: refresh tokens (deliberately not introduced), a shared throttling store for multiple instances, an audit UI for agents, HTTPS/HSTS (deployment phase).
+
 ## Later phases
 
-3. Security hardening (cookie tokens + CSRF, CSP, first-login password change, login rate limiting, least-privilege DB user, audit log).
 4. Frontend and product experience.
 5. Multi-tenant organizations.
 6. Plans, quotas, simulated billing.
-7. E2E tests and CI gates.
+7. E2E tests and CI gates (turn the headless-browser scenario into a committed Playwright suite).
 8. AWS deployment (separate cost proposal and approval first).
 9. Observability.
 10. Portfolio documentation.

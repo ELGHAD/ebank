@@ -77,16 +77,25 @@ Short records of the significant choices, why they were made and what they cost.
 
 ---
 
-## ADR-008 — Bearer token in `localStorage`, for now
+## ADR-008 — Session token in an HttpOnly cookie, with CSRF protection
 
-**Decision for Phase 1.** Keep the existing bearer-token model, isolating storage in one module (`src/context/sessionStorage.js`).
+**Status.** Implemented in Phase 3. It replaces the Phase 1 bearer token in `localStorage`.
 
-**Approved target (Phase 3).**
-- An `HttpOnly`, `Secure`, `SameSite=Strict` cookie, served same-origin, with Spring Security CSRF protection re-enabled.
-- A server-side token version for revocation on logout, disable or password change.
-- A Content-Security-Policy (blocked today by inline `<style>` blocks in pages).
+**Problem.** A token readable by JavaScript is stolen by any XSS bug. A cookie the browser sends automatically opens the door to CSRF instead.
 
-**Risk accepted until then.** An XSS vulnerability could read the token. React escapes output and no `dangerouslySetInnerHTML` is used, which reduces but does not remove this risk.
+**Decision.**
+- **Cookie:** the JWT lives in `EBANK_SESSION`, which is `HttpOnly`, `Secure`, `SameSite=Strict` and `Path=/api`, and lasts as long as the token. The login response body no longer contains the token.
+- **CSRF:** Spring Security's `csrf().spa()` double-submit pattern.
+  - The SPA calls `GET /api/auth/csrf` at startup.
+  - Axios copies the readable `XSRF-TOKEN` cookie into an `X-XSRF-TOKEN` header on writes (same-origin only).
+  - The token is BREACH-safe (XOR-masked when rendered).
+  - Login is CSRF-protected too.
+- **API clients** may still send `Authorization: Bearer`. Such requests skip CSRF, because browsers never add that header on their own. The filter **never falls back to the cookie** when an Authorization header is present, so the exemption cannot be abused (a mutation test proves it).
+- **Session restore:** the SPA asks `/api/auth/me` on load. Nothing is stored in the browser.
+
+**Consequences.** XSS can no longer exfiltrate the token, though it can still act within the page; the CSP (ADR-014) reduces that risk. There are no refresh tokens: when the session expires, the user logs in again.
+
+**Lesson (verified in a real browser).** Browsers send `Origin` on every POST, even same-origin ones. Nginx was forwarding `Host` without the port, so Spring saw `localhost:80` and rejected `Origin: http://localhost:3000` as cross-origin ("Invalid CORS request"). curl and MockMvc never send `Origin`, so this went unnoticed until headless Chrome was used. The fix: forward `$http_host` and `X-Forwarded-Port`.
 
 ---
 
@@ -164,3 +173,62 @@ Short records of the significant choices, why they were made and what they cost.
 **Decision.** Transfers are executed within the HTTP request. A `transfer` row exists only for a completed transfer; a failed one leaves no rows and no balance change (verified by a forced-failure test after the debit has been flushed).
 
 **Why.** There is no asynchronous step (no external payment network) that would justify `PENDING` states, queues or sagas. If reversals or scheduled transfers are added later, a status, or a separate reversal transfer, will be introduced with them.
+
+---
+
+## ADR-014 — Session revocation, first-login password change, Content-Security-Policy
+
+**Revocation.** Each user has a `token_version`, copied into the JWT as `ver`. The filter rejects tokens whose version is older than the user's.
+- Logout and password change increment it, which signs the user out **on every device**. Coarser than per-token revocation, but stateless and simple.
+- Disabling a user is effective immediately, because the user row is read on every request.
+
+**First login.** Clients onboarded with a one-time password have `must_change_password`. While it is set, the filter authenticates them **without any role**: only `/api/auth/me`, `/api/auth/password` and `/api/auth/logout` work, and everything else answers `403 PASSWORD_CHANGE_REQUIRED`. The SPA redirects to the change-password page, but the server-side block is what matters.
+- **Policy:** 12 to 64 characters, at most 72 bytes (BCrypt's limit), different from the current password, and must not contain the email's local part.
+- A wrong current password is a `400`, not a `401`, so the client does not mistake it for an expired session.
+
+**CSP.** `default-src 'self'; script-src 'self'; style-src 'self'; …; frame-ancestors 'none'`, set by Nginx on every SPA response. The pages' inline `<style>` blocks were moved to CSS files to make that possible. React's `style={{…}}` props are applied through the DOM (CSSOM), which CSP does not block. Verified in headless Chrome: no violations in the full scenario.
+
+---
+
+## ADR-015 — Login throttling
+
+**Decision.** A sliding window of failed password checks (login and password change):
+- 5 per username or 20 per client IP within 15 minutes.
+- Above either limit, attempts are refused with `429 TOO_MANY_ATTEMPTS` and `Retry-After`, **even with the right password**; otherwise an attacker learns when they guessed it.
+- A success clears the username's counter.
+
+**Client IP.** Nginx **overwrites** `X-Forwarded-For` with the connecting address, and Tomcat trusts it only from private-network proxies (`forward-headers-strategy: native`). A spoofed header was verified to be ignored.
+
+**Trade-offs.**
+- A per-username limit lets an attacker lock a victim out for 15 minutes; the short window bounds that denial of service.
+- State is in memory, per instance, and reset on restart. A multi-instance deployment would need a shared store.
+- Locally, every host request reaches Nginx from the Docker gateway, so all local users share one IP bucket.
+
+---
+
+## ADR-016 — Audit trail
+
+**Decision.** An append-only `audit_event` table, protected by an `@Immutable` entity, a trigger, and no UPDATE/DELETE grant. It records logins (success, failure, throttled), logout, password changes, onboarding, account opening and transfers, with actor, organization, target, client IP and short non-secret details. Agents read their organization's trail through `GET /api/admin/audit-events`.
+
+**Transaction semantics.**
+- Business events join the business transaction, so a rolled-back transfer leaves no "completed" event.
+- Security events of failing operations (a failed login) are committed independently (`REQUIRES_NEW`), so the failure is recorded even though the request throws.
+
+**Not recorded.** Passwords (temporary or chosen), tokens, request bodies. A test asserts this.
+
+---
+
+## ADR-017 — Least-privilege database access
+
+**Decision.** Two roles.
+- **Owner:** Flyway migrates as the schema owner (`POSTGRES_USER`).
+- **Application:** the app connects as `ebank_app`, created by a Docker init script. Migration V3 grants it data access only:
+  - SELECT/INSERT/UPDATE/DELETE on ordinary tables, but **only SELECT/INSERT** on `transfer`, `ledger_entry` and `audit_event`;
+  - no DDL;
+  - no access to `flyway_schema_history`.
+
+**Why.** Even a successful SQL injection could not drop tables, disable the append-only triggers, or rewrite the ledger and audit history.
+
+**Evidence.** The whole integration test suite runs as `ebank_app` against PostgreSQL. A dedicated test checks that `DROP TABLE`, `ALTER TABLE … DISABLE TRIGGER`, `CREATE TABLE`, deleting audit rows and reading Flyway history are all refused. The append-only test checks both layers (no grant for the app, triggers for the owner).
+
+**Operational note.** The init script only runs when the database volume is created. An existing Phase 1/2 Docker volume must be recreated (`docker compose down -v`, which deletes its demo data). In local development, connecting as `postgres` for both roles skips the grants (the V3 block detects it).
