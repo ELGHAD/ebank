@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import AdminDashboard from "./pages/AdminDashboard";
 import ClientDashboard from "./pages/ClientDashboard";
 import NewTransfer from "./pages/NewTransfer";
+import AccountHistory from "./pages/AccountHistory";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -43,6 +44,16 @@ const App = () => {
             element={
               <ProtectedRoute requiredRole="CLIENT">
                 <NewTransfer />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Client - Account history */}
+          <Route
+            path="/client/accounts/:accountId"
+            element={
+              <ProtectedRoute requiredRole="CLIENT">
+                <AccountHistory />
               </ProtectedRoute>
             }
           />

@@ -1,502 +1,268 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { createTransfer, getMyAccounts } from "../services/clientService";
-import { useNavigate } from "react-router-dom";
+import { errorMessage, fieldErrors } from "../api/errors";
+import { isValidRib, normalizeRib } from "../utils/rib";
+import { formatMoney } from "../utils/format";
+import "../styles/client.css";
 
-// Transfers are not processed by the backend yet (Phase 2 adds the transfer engine).
-const TRANSFERS_AVAILABLE = false;
+const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
+
+/** A fresh key per transfer attempt. Falls back to getRandomValues where randomUUID is unavailable (plain HTTP). */
+const newIdempotencyKey = () =>
+  crypto.randomUUID?.() ??
+  Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+
+const emptyForm = { sourceAccountId: "", destinationRib: "", amount: "", description: "" };
 
 export default function NewTransfer() {
   const navigate = useNavigate();
 
   const [accounts, setAccounts] = useState([]);
-  const [fromAccountId, setFromAccountId] = useState(null);
-
-  const [fromRib, setFromRib] = useState("");
-  const [toRib, setToRib] = useState("");
-  const [amount, setAmount] = useState("");
-  const [motif, setMotif] = useState("");
-
-  const [msg, setMsg] = useState("");
-  const [err, setErr] = useState("");
   const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [form, setForm] = useState(emptyForm);
+  const [errors, setErrors] = useState({});
+
+  // "form" -> "review" -> "done"
+  const [step, setStep] = useState("form");
+  const [attemptKey, setAttemptKey] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [canRetry, setCanRetry] = useState(false);
+  const [result, setResult] = useState(null);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        setErr("");
-        setLoadingAccounts(true);
-        const res = await getMyAccounts();
-        const list = res.data || [];
-        setAccounts(list);
-
-        if (list.length > 0) {
-          setFromAccountId(list[0].id);
-          setFromRib(list[0].rib);
+    getMyAccounts()
+      .then((res) => {
+        const active = (res.data || []).filter((a) => a.status === "ACTIVE");
+        setAccounts(active);
+        if (active.length > 0) {
+          setForm((f) => ({ ...f, sourceAccountId: String(active[0].id) }));
         }
-      } catch {
-        setErr("Cannot load accounts for transfer.");
-      } finally {
-        setLoadingAccounts(false);
-      }
-    };
-    load();
+      })
+      .catch((e) => setLoadError(errorMessage(e, "Cannot load your accounts.")))
+      .finally(() => setLoadingAccounts(false));
   }, []);
 
-  const onChangeAccount = (id) => {
-    const acc = accounts.find((a) => a.id === Number(id));
-    setFromAccountId(Number(id));
-    setFromRib(acc?.rib || "");
+  const source = accounts.find((a) => String(a.id) === form.sourceAccountId);
+
+  const update = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    setErrors({ ...errors, [e.target.name]: undefined });
   };
 
-  const canSubmit = useMemo(() => {
-    const a = Number(amount);
-    return TRANSFERS_AVAILABLE && Boolean(fromRib && toRib && amount && !Number.isNaN(a) && a > 0);
-  }, [fromRib, toRib, amount]);
+  const validate = () => {
+    const found = {};
+    if (!source) found.sourceAccountId = "Choose a source account.";
+    if (!isValidRib(form.destinationRib)) {
+      found.destinationRib = "This RIB is not valid. Check for typos (format: EB + 22 digits).";
+    } else if (source && normalizeRib(form.destinationRib) === source.rib) {
+      found.destinationRib = "The recipient must be a different account.";
+    }
+    if (!AMOUNT_PATTERN.test(form.amount) || Number(form.amount) <= 0) {
+      found.amount = "Enter an amount greater than 0 with at most 2 decimals.";
+    } else if (source && Number(form.amount) > Number(source.balance)) {
+      found.amount = "The amount exceeds the available balance.";
+    }
+    if (form.description.length > 140) found.description = "At most 140 characters.";
+    return found;
+  };
 
-  const onSubmit = async (e) => {
+  const onReview = (e) => {
     e.preventDefault();
-    setErr("");
-    setMsg("");
-
-    if (!fromRib || !toRib || !amount) {
-      setErr("Please fill all fields.");
-      return;
+    const found = validate();
+    setErrors(found);
+    if (Object.keys(found).length === 0) {
+      setAttemptKey(newIdempotencyKey()); // one key for this attempt, kept for retries
+      setSubmitError("");
+      setCanRetry(false);
+      setStep("review");
     }
-    if (Number(amount) <= 0) {
-      setErr("Amount must be > 0.");
-      return;
-    }
+  };
 
+  const onEdit = () => {
+    setAttemptKey(null); // any change makes it a new attempt
+    setStep("form");
+  };
+
+  const onConfirm = async () => {
+    setSubmitting(true);
+    setSubmitError("");
     try {
-      setSubmitting(true);
-      await createTransfer({
-        fromRib,
-        toRib,
-        amount: Number(amount),
-        motif,
-      });
-
-      setMsg("Transfer completed successfully ✅");
-      setTimeout(() => navigate("/client"), 800);
-    } catch (e2) {
-      console.error(e2);
-      setErr(e2?.response?.data?.message || "Transfer failed.");
+      const res = await createTransfer(
+        {
+          sourceAccountId: Number(form.sourceAccountId),
+          destinationRib: normalizeRib(form.destinationRib),
+          amount: form.amount, // decimal string: no binary floating point on the way
+          description: form.description.trim() || null,
+        },
+        attemptKey,
+      );
+      setResult(res.data);
+      setStep("done");
+    } catch (err) {
+      if (!err.response) {
+        // The transfer may or may not have been executed: retrying with the same key is safe
+        setCanRetry(true);
+        setSubmitError("Network problem: we could not confirm the transfer. You can safely retry.");
+      } else {
+        setErrors(fieldErrors(err));
+        setSubmitError(errorMessage(err, "The transfer was refused."));
+        setAttemptKey(null);
+        setStep("form");
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
-  return (
-    <>
-      <style>{`
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+  const onNewTransfer = () => {
+    setForm({ ...emptyForm, sourceAccountId: form.sourceAccountId });
+    setResult(null);
+    setStep("form");
+  };
 
-        .page{
-          min-height: 100vh;
-          padding: 28px 16px;
-          background: linear-gradient(135deg, #0f172a, #020617);
-          color: #e5e7eb;
-          display: flex;
-          justify-content: center;
-        }
+  const fieldProps = (name) => ({
+    id: `transfer-${name}`,
+    name,
+    value: form[name],
+    onChange: update,
+    "aria-invalid": Boolean(errors[name]),
+    "aria-describedby": errors[name] ? `transfer-${name}-error` : undefined,
+  });
 
-        .container{
-          width: min(980px, 100%);
-        }
-
-        .topbar{
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 14px;
-          flex-wrap: wrap;
-        }
-
-        .titleWrap{
-          display: flex;
-          align-items: center;
-          gap: 14px;
-        }
-
-        .logo{
-          width: 48px;
-          height: 48px;
-          border-radius: 14px;
-          background: linear-gradient(135deg, #22c55e, #16a34a);
-          color: #052e16;
-          display: grid;
-          place-items: center;
-          font-weight: 900;
-          font-size: 18px;
-          flex: 0 0 auto;
-        }
-
-        h1{
-          margin: 0;
-          font-size: 22px;
-          line-height: 1.2;
-        }
-
-        .subtitle{
-          margin: 3px 0 0;
-          font-size: 13px;
-          color: #9ca3af;
-        }
-
-        .actions{
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-        }
-
-        .btn{
-          border: 1px solid rgba(255,255,255,0.16);
-          background: rgba(255,255,255,0.06);
-          color: #e5e7eb;
-          padding: 10px 12px;
-          border-radius: 12px;
-          cursor: pointer;
-          text-decoration: none;
-          font-weight: 700;
-          font-size: 13px;
-          transition: transform .12s ease, background .12s ease, filter .12s ease;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .btn:hover{
-          background: rgba(255,255,255,0.10);
-          transform: translateY(-1px);
-        }
-
-        .btnPrimary{
-          border: none;
-          background: linear-gradient(135deg, #22c55e, #16a34a);
-          color: #052e16;
-          box-shadow: 0 16px 30px rgba(34,197,94,0.20);
-        }
-
-        .btnPrimary:hover{ filter: brightness(1.05); }
-        .btnPrimary:disabled{ opacity: .7; cursor: not-allowed; }
-
-        .btnBack{
-          border: 1px solid rgba(255,255,255,0.16);
-          background: rgba(255,255,255,0.06);
-          color: #e5e7eb;
-        }
-
-        .card{
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.14);
-          backdrop-filter: blur(12px);
-          border-radius: 18px;
-          box-shadow: 0 20px 60px rgba(0,0,0,0.55);
-          padding: 16px;
-        }
-
-        .cardTitle{
-          margin: 0 0 10px;
-          font-size: 14px;
-          color: #cbd5e1;
-          font-weight: 800;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .grid{
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 14px;
-        }
-
-        .form{
-          max-width: 560px;
-        }
-
-        .field{
-          margin-bottom: 12px;
-        }
-
-        .label{
-          display: block;
-          margin-bottom: 6px;
-          font-size: 13px;
-          color: #9ca3af;
-          font-weight: 700;
-        }
-
-        .inputWrap{
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px;
-          border-radius: 12px;
-          background: rgba(0,0,0,0.25);
-          border: 1px solid rgba(255,255,255,0.18);
-        }
-
-        .inputWrap:focus-within{
-          border-color: #22c55e;
-          box-shadow: 0 0 0 3px rgba(34,197,94,0.25);
-        }
-
-        input, select{
-          width: 100%;
-          background: transparent;
-          border: none;
-          outline: none;
-          color: #fff;
-          font-size: 14px;
-        }
-
-        input::placeholder{
-          color: rgba(226,232,240,0.55);
-        }
-
-        .hint{
-          margin-top: 6px;
-          font-size: 12px;
-          color: rgba(226,232,240,0.6);
-        }
-
-        .row{
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
-
-        @media (max-width: 720px){
-          .row{ grid-template-columns: 1fr; }
-        }
-
-        .alert{
-          padding: 10px 12px;
-          border-radius: 12px;
-          font-size: 13px;
-          text-align: center;
-          margin-bottom: 12px;
-          border: 1px solid rgba(255,255,255,0.14);
-          background: rgba(255,255,255,0.06);
-          color: #e5e7eb;
-        }
-
-        .alertError{
-          background: rgba(239,68,68,0.15);
-          border-color: rgba(239,68,68,0.4);
-          color: #fecaca;
-        }
-
-        .alertOk{
-          background: rgba(34,197,94,0.14);
-          border-color: rgba(34,197,94,0.35);
-          color: #bbf7d0;
-        }
-
-        .mini{
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 10px;
-          border-radius: 999px;
-          border: 1px solid rgba(255,255,255,0.14);
-          background: rgba(255,255,255,0.06);
-          color: rgba(226,232,240,0.85);
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .footer{
-          margin-top: 14px;
-          text-align: center;
-          font-size: 12px;
-          color: #6b7280;
-        }
-
-        .skeleton{
-          height: 42px;
-          border-radius: 12px;
-          background: linear-gradient(
-            90deg,
-            rgba(255,255,255,0.05),
-            rgba(255,255,255,0.09),
-            rgba(255,255,255,0.05)
-          );
-          background-size: 200% 100%;
-          animation: shine 1.1s infinite linear;
-          border: 1px solid rgba(255,255,255,0.12);
-        }
-
-        @keyframes shine{
-          0%{ background-position: 0% 0; }
-          100%{ background-position: -200% 0; }
-        }
-      `}</style>
-
-      <div className="page">
-        <div className="container">
-          {/* Topbar */}
-          <div className="topbar">
-            <div className="titleWrap">
-              <div className="logo">eB</div>
-              <div>
-                <h1>New transfer</h1>
-                <div className="subtitle">
-                  Send money securely between accounts
-                </div>
-              </div>
-            </div>
-
-            <div className="actions">
-              <button
-                className="btn btnBack"
-                onClick={() => navigate("/client")}
-              >
-                <span aria-hidden="true">←</span> Back
-              </button>
-            </div>
-          </div>
-
-          <div className="grid">
-            {/* Info Card */}
-            <div className="card">
-              <div className="cardTitle">
-                <span aria-hidden="true">🧾</span> Transfer form
-              </div>
-
-              {!TRANSFERS_AVAILABLE && (
-                <div className="alert" role="status">
-                  Transfers are not available yet in this version of the demo.
-                </div>
-              )}
-              {err && (
-                <div className="alert alertError" role="alert">
-                  {err}
-                </div>
-              )}
-              {msg && <div className="alert alertOk">{msg}</div>}
-
-              {loadingAccounts ? (
-                <>
-                  <div className="skeleton" style={{ marginBottom: 12 }} />
-                  <div className="skeleton" style={{ marginBottom: 12 }} />
-                  <div className="skeleton" style={{ marginBottom: 12 }} />
-                </>
-              ) : accounts.length === 0 ? (
-                <div className="alert alertError">
-                  No accounts found. You cannot make a transfer.
-                </div>
-              ) : (
-                <form onSubmit={onSubmit} className="form">
-                  {/* Account select if multiple */}
-                  {accounts.length > 1 && (
-                    <div className="field">
-                      <span className="label">Choose account</span>
-                      <div className="inputWrap">
-                        <select
-                          value={fromAccountId || ""}
-                          onChange={(e) => onChangeAccount(e.target.value)}
-                        >
-                          {accounts.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.rib}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="hint">
-                        Select the source account for this transfer.
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="row">
-                    <div className="field">
-                      <span className="label">From RIB</span>
-                      <div className="inputWrap">
-                        <input value={fromRib} disabled />
-                      </div>
-                      <div className="hint">
-                        <span className="mini">
-                          <span aria-hidden="true">🔒</span> Read-only
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="field">
-                      <span className="label">Amount (MAD)</span>
-                      <div className="inputWrap">
-                        <input
-                          type="number"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          placeholder="Ex: 250.00"
-                          min="0"
-                          step="0.01"
-                        />
-                      </div>
-                      <div className="hint">Amount must be greater than 0.</div>
-                    </div>
-                  </div>
-
-                  <div className="field">
-                    <span className="label">To RIB</span>
-                    <div className="inputWrap">
-                      <input
-                        value={toRib}
-                        onChange={(e) => setToRib(e.target.value)}
-                        placeholder="Enter destination RIB"
-                      />
-                    </div>
-                    <div className="hint">
-                      Make sure the destination RIB is correct.
-                    </div>
-                  </div>
-
-                  <div className="field">
-                    <span className="label">Motif (optional)</span>
-                    <div className="inputWrap">
-                      <input
-                        value={motif}
-                        onChange={(e) => setMotif(e.target.value)}
-                        placeholder="Ex: Rent / Invoice / Family..."
-                      />
-                    </div>
-                    <div className="hint">
-                      Short description for this transfer.
-                    </div>
-                  </div>
-
-                  <button
-                    className="btn btnPrimary"
-                    type="submit"
-                    disabled={!canSubmit || submitting}
-                    style={{ width: "100%", justifyContent: "center" }}
-                  >
-                    {submitting ? (
-                      <>
-                        <span aria-hidden="true">⏳</span> Processing...
-                      </>
-                    ) : (
-                      <>
-                        <span aria-hidden="true">✓</span> Validate transfer
-                      </>
-                    )}
-                  </button>
-                </form>
-              )}
-            </div>
-
-            <div className="footer">Banking simulation · synthetic data only</div>
-          </div>
-        </div>
+  const fieldError = (name) =>
+    errors[name] && (
+      <div id={`transfer-${name}-error`} className="fieldError">
+        {errors[name]}
       </div>
-    </>
+    );
+
+  return (
+    <div className="client-page">
+      <div className="container">
+        <div className="topbar">
+          <div>
+            <h1>New transfer</h1>
+            <div className="subtitle">Simulated transfer to any account of your bank</div>
+          </div>
+          <button type="button" className="btn" onClick={() => navigate("/client")}>
+            <span aria-hidden="true">←</span> Back
+          </button>
+        </div>
+
+        <div className="card">
+          {loadError && (
+            <div className="alert alertError" role="alert">
+              {loadError}
+            </div>
+          )}
+          {submitError && (
+            <div className="alert alertError" role="alert">
+              {submitError}
+            </div>
+          )}
+
+          {loadingAccounts ? (
+            <p className="empty">Loading your accounts…</p>
+          ) : accounts.length === 0 ? (
+            <p className="empty">You have no active account to transfer from.</p>
+          ) : step === "form" ? (
+            <form className="form" onSubmit={onReview} noValidate>
+              <div>
+                <label htmlFor="transfer-sourceAccountId">From account</label>
+                <select {...fieldProps("sourceAccountId")}>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.rib}: {formatMoney(a.balance)} {a.currency}
+                    </option>
+                  ))}
+                </select>
+                {fieldError("sourceAccountId")}
+              </div>
+              <div>
+                <label htmlFor="transfer-destinationRib">Recipient RIB</label>
+                <input {...fieldProps("destinationRib")} placeholder="EB + 22 digits" autoComplete="off" />
+                {fieldError("destinationRib")}
+              </div>
+              <div>
+                <label htmlFor="transfer-amount">Amount{source ? ` (${source.currency})` : ""}</label>
+                <input {...fieldProps("amount")} inputMode="decimal" placeholder="250.00" />
+                {fieldError("amount")}
+              </div>
+              <div>
+                <label htmlFor="transfer-description">Description (optional)</label>
+                <input {...fieldProps("description")} maxLength={140} placeholder="Rent, invoice…" />
+                {fieldError("description")}
+              </div>
+              <div className="actions">
+                <button type="submit" className="btn btnPrimary">
+                  Review transfer
+                </button>
+              </div>
+            </form>
+          ) : step === "review" ? (
+            <section aria-labelledby="review-title">
+              <h2 id="review-title" style={{ fontSize: 16 }}>
+                Confirm this transfer
+              </h2>
+              <dl className="summary">
+                <dt>From</dt>
+                <dd className="mono">{source?.rib}</dd>
+                <dt>To</dt>
+                <dd className="mono">{normalizeRib(form.destinationRib)}</dd>
+                <dt>Amount</dt>
+                <dd>
+                  {formatMoney(form.amount)} {source?.currency}
+                </dd>
+                {form.description.trim() && (
+                  <>
+                    <dt>Description</dt>
+                    <dd>{form.description.trim()}</dd>
+                  </>
+                )}
+              </dl>
+              <div className="actions">
+                <button type="button" className="btn btnPrimary" onClick={onConfirm} disabled={submitting}>
+                  {submitting ? "Processing…" : canRetry ? "Retry" : "Confirm transfer"}
+                </button>
+                <button type="button" className="btn" onClick={onEdit} disabled={submitting}>
+                  Edit
+                </button>
+              </div>
+            </section>
+          ) : (
+            <section role="status">
+              <div className="alert alertOk">Transfer completed.</div>
+              <dl className="summary">
+                <dt>Amount</dt>
+                <dd>
+                  {formatMoney(result.amount)} {result.currency}
+                </dd>
+                <dt>To</dt>
+                <dd className="mono">{result.destinationRib}</dd>
+                <dt>New balance</dt>
+                <dd>
+                  {formatMoney(result.balanceAfter)} {result.currency}
+                </dd>
+                <dt>Reference</dt>
+                <dd>#{result.id}</dd>
+              </dl>
+              <div className="actions">
+                <Link className="btn" to={`/client/accounts/${result.sourceAccountId}`}>
+                  View account history
+                </Link>
+                <button type="button" className="btn" onClick={onNewTransfer}>
+                  New transfer
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
+
+        <div className="footer">Banking simulation · synthetic data only</div>
+      </div>
+    </div>
   );
 }

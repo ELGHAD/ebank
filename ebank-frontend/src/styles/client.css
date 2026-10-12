@@ -1,0 +1,76 @@
+/* Shared styles of the client pages (transfer, account history). */
+.client-page {
+  min-height: 100vh;
+  padding: 28px 16px;
+  background: linear-gradient(135deg, #0f172a, #020617);
+  color: #e5e7eb;
+  display: flex;
+  justify-content: center;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  box-sizing: border-box;
+}
+.client-page *, .client-page *::before, .client-page *::after { box-sizing: border-box; }
+.client-page .container { width: min(980px, 100%); }
+.client-page .topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.client-page h1 { margin: 0; font-size: 22px; }
+.client-page .subtitle { margin: 3px 0 0; font-size: 13px; color: #9ca3af; }
+.client-page .card {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 18px;
+  padding: 16px;
+}
+.client-page .btn {
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.06);
+  color: #e5e7eb;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 13px;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.client-page .btn:hover { background: rgba(255,255,255,0.10); }
+.client-page .btn:disabled { opacity: .6; cursor: not-allowed; }
+.client-page .btn:focus-visible, .client-page input:focus-visible, .client-page select:focus-visible {
+  outline: 2px solid #22c55e; outline-offset: 2px;
+}
+.client-page .btnPrimary { border: none; background: linear-gradient(135deg, #22c55e, #16a34a); color: #052e16; }
+.client-page .form { max-width: 560px; display: grid; gap: 12px; }
+.client-page label { display: block; margin-bottom: 6px; font-size: 13px; color: #9ca3af; font-weight: 700; }
+.client-page input, .client-page select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  font-size: 14px;
+}
+.client-page select option { color: #000; }
+.client-page .hint { margin-top: 6px; font-size: 12px; color: rgba(226,232,240,0.65); }
+.client-page .fieldError { margin-top: 6px; font-size: 12px; color: #fca5a5; }
+.client-page .alert {
+  padding: 10px 12px; border-radius: 12px; font-size: 13px; margin-bottom: 12px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06);
+}
+.client-page .alertError { background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.4); color: #fecaca; }
+.client-page .alertOk { background: rgba(34,197,94,0.14); border-color: rgba(34,197,94,0.35); color: #bbf7d0; }
+.client-page .summary { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0 0 16px; }
+.client-page .summary dt { color: #9ca3af; font-size: 13px; }
+.client-page .summary dd { margin: 0; font-weight: 700; word-break: break-all; }
+.client-page .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+.client-page .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.client-page .tableWrap { overflow-x: auto; }
+.client-page table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.client-page th { text-align: left; padding: 10px; font-size: 12px; color: #9ca3af; border-bottom: 1px solid rgba(255,255,255,0.12); }
+.client-page td { padding: 10px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.client-page .amountIn { color: #86efac; font-weight: 800; }
+.client-page .amountOut { color: #fca5a5; font-weight: 800; }
+.client-page .empty { text-align: center; padding: 24px; color: rgba(226,232,240,0.75); font-size: 13px; }
+.client-page .footer { margin-top: 14px; text-align: center; font-size: 12px; color: #6b7280; }

@@ -36,11 +36,27 @@ Phases follow the audit ([PROJECT_AUDIT.md](PROJECT_AUDIT.md), §13). A phase is
 | Frontend auth defects F-1/F-2/F-3 fixed | ✅ | `ProtectedRoute.test`, `ClientDashboard.test`, `axiosClient.test` |
 | GitHub Actions CI | ⚠️ written, **not yet run on GitHub** | `actionlint` passes; first push will tell |
 
-Not done in Phase 1 (by design): transfers, history, CSP, cookie-based tokens, rate limiting, password change, OpenAPI.
+Not done in Phase 1 (by design, see Phase 2+): transfers, history, CSP, cookie-based tokens, rate limiting, password change, OpenAPI.
 
-## Phase 2 — Transfer engine (next)
+## Phase 2 — Transfer engine ✅ (2026-10-12)
 
-Same-currency transfers to any account by RIB, using a double-entry ledger, pessimistic locks in id order, an `Idempotency-Key`, and paginated history. The initial deposit becomes an explicit opening ledger entry. Acceptance criteria are in the audit, §13.
+| Acceptance criterion | Result | Evidence |
+|---|---|---|
+| Transfer + ledger schema (Flyway V2), opening deposits as ledger entries | ✅ | V2 applied on a fresh DB (tests) **and** on the Phase 1 Docker volume: the old balance was backfilled as a DEPOSIT |
+| Append-only ledger and transfers | ✅ | `@Immutable` + DB triggers; test and manual `UPDATE` both rejected |
+| Success; balanced DEBIT/CREDIT entries | ✅ | `TransferIntegrationTest`; `assertBooksBalanced()` after every scenario |
+| Insufficient funds, ≤ 0 amount, bad scale, invalid RIB, unknown recipient, same account | ✅ | `TransferIntegrationTest` (422 / 400 / 404 with stable codes) |
+| Blocked/closed accounts, currency mismatch | ✅ | `TransferIntegrationTest` |
+| Not the owner (IDOR), cross-tenant recipient, agent role | ✅ | 404 `SOURCE_ACCOUNT_NOT_FOUND`, 404 `RECIPIENT_NOT_FOUND`, 403 |
+| Idempotency: replay, key reused with different payload, missing/invalid key | ✅ | `TransferIntegrationTest`; manual run through Nginx shows `Idempotent-Replayed: true` |
+| Rollback after a failure that occurs after the debit is flushed | ✅ | `failureAfterTheDebitRollsEverythingBack` |
+| Concurrency: 20 simultaneous debits on one account, opposite transfers, concurrent same-key retries | ✅ | `TransferConcurrencyTest` on PostgreSQL; **mutation checks**: removing the lock (20/20 succeeded instead of 10), the lock order (`deadlock detected`) or the post-lock replay check (duplicate-key errors) makes them fail |
+| Paginated, filterable history with ownership and tenant checks | ✅ | `AccountHistoryIntegrationTest` |
+| Reconciliation: balance == ledger for every account | ✅ | Asserted in tests; 0 unreconciled accounts after the Docker E2E run |
+| Frontend: review/confirm transfer, retry-safe idempotency key, history page | ✅ | Vitest 21/21 (stable over 5 consecutive runs); E2E through Nginx |
+| Backend suite | ✅ | 120 tests, 0 failures (`./mvnw verify`, JDK 21) |
+
+Not verified: behaviour in a real browser (the flows were exercised over HTTP and with component tests), and CI on GitHub (not pushed yet).
 
 ## Later phases
 

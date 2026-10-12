@@ -40,6 +40,6 @@ public class Client {
 
     @PrePersist
     void onCreate() {
-        createdAt = Instant.now();
+        createdAt = Timestamps.now();
     }
 }

@@ -1,6 +1,6 @@
 # eBank: banking simulation platform
 
-A full-stack banking **simulation** built with Spring Boot and React. Agents onboard clients and open accounts; clients see their accounts and balances. It is being developed in phases into a small multi-tenant SaaS demo with a correct transfer engine.
+A full-stack banking **simulation** built with Spring Boot and React. Agents onboard clients and open accounts; clients transfer money between accounts and browse their history. The transfer engine is atomic, safe under concurrency and idempotent, and backed by an append-only ledger. The project is being developed in phases into a small multi-tenant SaaS demo.
 
 > **Simulation only.** eBank is an educational and portfolio project. It moves no real money, connects to no payment network, is not a bank and makes no regulatory claims. Use synthetic data only.
 
@@ -13,7 +13,8 @@ A full-stack banking **simulation** built with Spring Boot and React. Agents onb
 | Account opening (server-generated RIB, currency, initial deposit) | Working, tested |
 | Client account overview | Working, tested |
 | Tenant isolation (organization scoping) | Foundation in place and tested; a single "Demo Bank" organization is seeded |
-| **Transfers and transaction history** | **Not implemented yet** (next phase); the transfer screen says so |
+| Transfers to any account of the same bank (by RIB), with review/confirm step | Working, tested (incl. concurrency on real PostgreSQL) |
+| Append-only ledger, paginated and filterable account history | Working, tested |
 | Multi-tenant administration, plans and quotas | Planned |
 | Cloud deployment | Not deployed |
 
@@ -34,7 +35,30 @@ flowchart LR
 - **Database:** the schema is defined by Flyway migrations; Hibernate only validates it.
   - Money is `NUMERIC(19,2)`.
   - Constraints enforce non-negative balances and same-organization ownership.
+  - Triggers make transfers and ledger entries append-only.
 - **Frontend:** React 19 + React Router, built with Vite. The API is called same-origin (`/api`).
+
+### How a transfer is processed
+
+```mermaid
+sequenceDiagram
+  participant UI as React (NewTransfer)
+  participant API as TransferController
+  participant S as TransferService (@Transactional)
+  participant DB as PostgreSQL
+  UI->>API: POST /api/client/transfers + Idempotency-Key
+  API->>S: transfer(caller, key, request)
+  S->>DB: key already used by this user? (replay)
+  S->>DB: caller owns source? recipient RIB in same organization?
+  S->>DB: SELECT ... FOR UPDATE both accounts, ascending id
+  S->>DB: key used meanwhile? (concurrent retry)
+  Note over S: active, same currency, amount scale, sufficient funds
+  S->>DB: UPDATE balances, INSERT transfer, INSERT DEBIT + CREDIT
+  DB-->>S: COMMIT (all or nothing)
+  S-->>UI: 201 transfer + new balance (200 + Idempotent-Replayed on retry)
+```
+
+Design decisions and trade-offs: [ADR-010 (ledger)](docs/DECISIONS.md#adr-010--ledger-as-source-of-truth-stored-balance-as-a-transactional-cache), [ADR-011 (locking)](docs/DECISIONS.md#adr-011--concurrency-pessimistic-row-locks-in-a-global-order), [ADR-012 (idempotency)](docs/DECISIONS.md#adr-012--idempotency-key-for-transfer-creation).
 
 ## Tech stack
 
@@ -59,7 +83,8 @@ docker compose up --build -d --wait
 Open http://localhost:3000 and sign in as the demo agent, `agent@demo.ebank.test`, with the `DEMO_AGENT_PASSWORD` from your `.env`. As the agent:
 1. Onboard a client. The response shows the client's **one-time password**, once.
 2. Open an account for that client.
-3. Log out and sign in as the client to see the account.
+3. Open a second account (same currency) for another client.
+4. Log out and sign in as the first client: make a transfer to the second account's RIB, then open the account history.
 
 Stop with `docker compose down`. Add `-v` to also delete the database volume.
 
@@ -112,13 +137,17 @@ Secrets live only in `.env` / `application-local.yml`, both git-ignored. `VITE_*
 | `POST /api/admin/accounts` | AGENT | `{clientId, currency?, initialDeposit?}` → account with generated RIB |
 | `GET /api/admin/clients/{id}/accounts` | AGENT | Accounts of a client of the agent's organization |
 | `GET /api/client/accounts` | CLIENT | The caller's own accounts |
+| `POST /api/client/transfers` | CLIENT | Header `Idempotency-Key`; `{sourceAccountId, destinationRib, amount, description?}` → transfer + new balance |
+| `GET /api/client/accounts/{id}/entries` | CLIENT | Own account history: `page`, `size` (≤100), `type` (DEPOSIT/DEBIT/CREDIT), `from`/`to` (dates, UTC) |
+| `GET /api/admin/accounts/{id}/entries` | AGENT | History of any account of the agent's organization |
 | `GET /actuator/health` | public | Liveness/readiness |
 
 Errors use the `application/problem+json` format, for example `{"status":409,"code":"EMAIL_TAKEN","detail":"..."}`.
 
 ## Known limitations
 
-- Transfers, transaction history, pagination and client search are not implemented yet.
+- Agents have no client search or account list in the UI yet (they need the numeric client id).
+- No transfer reversals, scheduled transfers or FX; transfers are same-currency only.
 - The JWT is stored in `localStorage`; moving it to an HttpOnly cookie with CSRF protection is planned (ADR-008). There is no rate limiting on login yet.
 - Clients are not yet forced to change their one-time password.
 - Single seeded organization; organization management comes later.

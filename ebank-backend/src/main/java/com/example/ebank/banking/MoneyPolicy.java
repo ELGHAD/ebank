@@ -42,6 +42,14 @@ public class MoneyPolicy {
         return normalize(amount, currency);
     }
 
+    /** Validates a strictly positive amount for the currency and returns it at the currency's scale. */
+    public BigDecimal requirePositiveAmount(BigDecimal amount, String currency) {
+        if (amount == null || amount.signum() <= 0) {
+            throw new BadRequestException("NON_POSITIVE_AMOUNT", "Amount must be greater than zero");
+        }
+        return normalize(amount, currency);
+    }
+
     private BigDecimal normalize(BigDecimal amount, String currency) {
         int scale = scaleOf(currency);
         if (amount.stripTrailingZeros().scale() > scale) {

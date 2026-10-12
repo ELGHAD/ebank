@@ -12,13 +12,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -111,5 +115,49 @@ public abstract class IntegrationTestSupport {
 
     protected ResultActions getWithToken(String url, String token) throws Exception {
         return mvc.perform(get(url).header("Authorization", bearer(token)));
+    }
+
+    protected record AccountInfo(long id, String rib) {
+    }
+
+    protected AccountInfo newAccount(String agentToken, long clientId, String deposit, String currency) throws Exception {
+        String body = openAccount(agentToken, clientId,
+                "\"initialDeposit\": " + deposit + ", \"currency\": \"" + currency + "\"")
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Number id = JsonPath.read(body, "$.id");
+        return new AccountInfo(id.longValue(), JsonPath.read(body, "$.rib"));
+    }
+
+    protected AccountInfo newAccount(String agentToken, long clientId, String deposit) throws Exception {
+        return newAccount(agentToken, clientId, deposit, "MAD");
+    }
+
+    @Autowired protected JdbcTemplate jdbc;
+
+    protected BigDecimal balanceOf(long accountId) {
+        return jdbc.queryForObject("select balance from bank_account where id = ?", BigDecimal.class, accountId);
+    }
+
+    /**
+     * Global ledger invariants, over every row written by any test so far:
+     * every cached balance matches its ledger, and every transfer has exactly one DEBIT and one CREDIT
+     * of the same amount as the transfer.
+     */
+    protected void assertBooksBalanced() {
+        List<Long> unreconciled = jdbc.queryForList("""
+                select a.id from bank_account a
+                left join (select account_id, sum(case when entry_type = 'DEBIT' then -amount else amount end) total
+                           from ledger_entry group by account_id) l on l.account_id = a.id
+                where a.balance <> coalesce(l.total, 0)""", Long.class);
+        List<Long> unbalancedTransfers = jdbc.queryForList("""
+                select t.id from transfer t
+                left join ledger_entry d on d.transfer_id = t.id and d.entry_type = 'DEBIT'
+                left join ledger_entry c on c.transfer_id = t.id and c.entry_type = 'CREDIT'
+                where d.id is null or c.id is null or d.amount <> t.amount or c.amount <> t.amount
+                   or d.account_id <> t.source_account_id or c.account_id <> t.destination_account_id
+                   or (select count(*) from ledger_entry e where e.transfer_id = t.id) <> 2""", Long.class);
+        assertThat(unreconciled).as("accounts whose balance != ledger").isEmpty();
+        assertThat(unbalancedTransfers).as("transfers with unbalanced entries").isEmpty();
     }
 }

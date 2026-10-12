@@ -8,7 +8,7 @@ Short records of the significant choices, why they were made and what they cost.
 
 **Context.** One developer, a small codebase, and a core operation (a transfer) that must atomically update two accounts, a ledger and an idempotency record.
 
-**Decision.** One Spring Boot application with one PostgreSQL database. Code stays organized by layer for now; it moves to feature packages (account, transfer, ledger…) when the transfer module is added.
+**Decision.** One Spring Boot application with one PostgreSQL database. New modules are feature packages: `com.example.ebank.transfer` holds its entities, repositories, service, controller and DTOs. The original layer packages (`web`, `services`, `entities`…) are migrated when they are next substantially changed, not in a big-bang refactor.
 
 **Consequences.** A transfer is a single ACID transaction instead of a distributed saga. Scaling is vertical or by running identical instances behind a load balancer. Module boundaries are enforced by package discipline, not network calls.
 
@@ -97,3 +97,70 @@ Short records of the significant choices, why they were made and what they cost.
 **Decision.** Vite for dev server and build, Vitest + Testing Library for tests, ESLint flat config. The app stays in JavaScript. The dev server proxies `/api` to the backend, so development is same-origin like production and needs no CORS.
 
 **Result.** `npm audit` reports 0 vulnerabilities with the new toolchain (measured 2026-10-12).
+
+---
+
+## ADR-010 — Ledger as source of truth, stored balance as a transactional cache
+
+**Context.** A transfer must be auditable and every balance explainable, but reading a balance should stay a single-row read.
+
+**Options.**
+1. Balance only: no audit trail.
+2. Derive the balance from the ledger on every read: correct, but reads get slower as history grows, and checking for overdraft needs an aggregate under lock.
+3. **An append-only ledger plus a stored balance updated in the same transaction.**
+
+**Decision.** Option 3.
+- `ledger_entry` rows are `DEPOSIT`, `DEBIT` or `CREDIT`, always with a positive amount and the account's running `balance_after`.
+- Each transfer writes exactly one DEBIT and one CREDIT of the transfer amount.
+- `bank_account.balance` is a cache of `Σ(DEPOSIT + CREDIT) − Σ(DEBIT)`, maintained in the same transaction.
+- `LedgerEntryRepository.findUnreconciledAccountIds()` must always return nothing; the tests assert this after every scenario, including the concurrency tests.
+
+**Append-only.** Entities are `@Immutable`, and PostgreSQL triggers reject any `UPDATE` or `DELETE` on `transfer` and `ledger_entry`, even from a SQL console. Corrections, if ever needed, will be new compensating transfers.
+
+**Simplification, stated openly.** Deposits are single-sided entries: simulated money enters the system, and there is no "bank cash" counter-account. A full double-entry chart of accounts would add a system account per organization and currency; that is not useful at this scale. The double-entry invariant therefore holds **per transfer**, not globally.
+
+---
+
+## ADR-011 — Concurrency: pessimistic row locks in a global order
+
+**Problem.** Two concurrent transfers from the same account can both read balance 100 and both debit 80. That is a lost update, or a negative balance.
+
+**Options.**
+- Optimistic locking (`@Version`) with retries: no waiting, but hot accounts produce retry storms, and the code needs a retry loop.
+- A conditional update (`UPDATE … SET balance = balance - x WHERE balance >= x`): fast, but the credit side and the ledger's `balance_after` still need care.
+- **Pessimistic locks (`SELECT … FOR UPDATE`)**: concurrent transfers on the same account queue up; business rules are evaluated on locked, current data.
+
+**Decision.** Pessimistic locks on both accounts, always acquired in ascending account id order. A transfer A→B and a transfer B→A then lock in the same order, and cannot deadlock.
+
+**Pitfall avoided.** The pre-lock checks (ownership, recipient lookup) use `exists` and id-only queries. If a `BankAccount` entity were already loaded in the persistence context, Hibernate would return that stale instance from the locking query: the row would be locked, but the balance in memory would be old.
+
+**Evidence.** `TransferConcurrencyTest` runs on real PostgreSQL. Each guarantee was checked by deliberately breaking the code:
+- Without the lock, 20 of 20 transfers of 10 succeeded from a 100.00 account (expected exactly 10).
+- Without the id ordering, PostgreSQL reported `deadlock detected`.
+
+**Trade-off.** Transfers touching the same account are serialized: throughput per account is bounded, which is the correct behaviour for a balance. Transactions are kept short, with no remote calls inside.
+
+---
+
+## ADR-012 — Idempotency-Key for transfer creation
+
+**Problem.** A client that times out cannot know whether its transfer happened. Retrying blindly could pay twice.
+
+**Decision.** `POST /api/client/transfers` requires an `Idempotency-Key` header. The SPA generates a random key per transfer attempt, keeps it for retries of that attempt, and generates a new one when the user edits the form.
+- The key is stored on the transfer row, with a unique constraint on `(initiated_by_id, idempotency_key)`, and a SHA-256 hash of the canonical request.
+- Same key, same payload → the original transfer, with `200` and `Idempotent-Replayed: true`. The first call answered `201`.
+- Same key, different payload → `422 IDEMPOTENCY_KEY_REUSED`.
+- Concurrent retries with the same key queue on the account lock. The key is looked up again after the lock is acquired, so all but one get the replayed result; the unique constraint is the last line of defence.
+
+**Limits.**
+- Only successful transfers are stored. A retry of a *rejected* request (for example, insufficient funds) is evaluated again, which is the useful behaviour once funds arrive.
+- Keys never expire (no cleanup job yet).
+- A key reused at the same instant for different source accounts surfaces as `409 DATA_CONFLICT`.
+
+---
+
+## ADR-013 — Synchronous transfers, no status column
+
+**Decision.** Transfers are executed within the HTTP request. A `transfer` row exists only for a completed transfer; a failed one leaves no rows and no balance change (verified by a forced-failure test after the debit has been flushed).
+
+**Why.** There is no asynchronous step (no external payment network) that would justify `PENDING` states, queues or sagas. If reversals or scheduled transfers are added later, a status, or a separate reversal transfer, will be introduced with them.

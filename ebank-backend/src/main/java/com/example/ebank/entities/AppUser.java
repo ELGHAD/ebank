@@ -42,6 +42,6 @@ public class AppUser {
 
     @PrePersist
     void onCreate() {
-        createdAt = Instant.now();
+        createdAt = Timestamps.now();
     }
 }

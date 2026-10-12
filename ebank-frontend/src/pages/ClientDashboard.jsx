@@ -266,6 +266,8 @@ export default function ClientDashboard() {
           color: #e5e7eb;
         }
 
+        tbody td a{ color: #86efac; font-weight: 700; }
+
         tbody tr:hover{
           background: rgba(255,255,255,0.06);
         }
@@ -431,6 +433,7 @@ export default function ClientDashboard() {
                       <th>Currency</th>
                       <th>Balance</th>
                       <th>Status</th>
+                      <th><span className="sr-only">Actions</span></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -444,6 +447,11 @@ export default function ClientDashboard() {
                           <span className={statusBadgeClass(a.status)}>
                             <span aria-hidden="true">●</span> {a.status}
                           </span>
+                        </td>
+                        <td>
+                          <Link to={`/client/accounts/${a.id}`} aria-label={`History of account ${a.rib}`}>
+                            History
+                          </Link>
                         </td>
                       </tr>
                     ))}

@@ -12,10 +12,12 @@ import com.example.ebank.entities.Client;
 import com.example.ebank.exception.NotFoundException;
 import com.example.ebank.repositories.BankAccountRepository;
 import com.example.ebank.repositories.ClientRepository;
+import com.example.ebank.transfer.LedgerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -27,10 +29,11 @@ public class BankAccountServiceImpl implements BankAccountService {
     private final BankAccountRepository bankAccountRepository;
     private final ClientRepository clientRepository;
     private final MoneyPolicy moneyPolicy;
+    private final LedgerService ledgerService;
 
     /**
-     * Phase 1 stores the initial deposit directly in the balance. Phase 2 (ledger) will record it as an
-     * explicit opening-deposit entry so that every balance is explained by ledger entries.
+     * The initial deposit is recorded as a DEPOSIT ledger entry in the same transaction,
+     * so the new balance is explained by the ledger like every later movement.
      */
     @Override
     @Transactional
@@ -43,9 +46,13 @@ public class BankAccountServiceImpl implements BankAccountService {
         account.setClient(client);
         account.setRib(newUniqueRib());
         account.setCurrency(currency);
-        account.setBalance(moneyPolicy.requireNonNegativeAmount(req.initialDeposit(), currency));
+        BigDecimal initialDeposit = moneyPolicy.requireNonNegativeAmount(req.initialDeposit(), currency);
+        account.setBalance(initialDeposit);
         account.setStatus(AccountStatus.ACTIVE);
         bankAccountRepository.saveAndFlush(account);
+        if (initialDeposit.signum() > 0) {
+            ledgerService.recordDeposit(account, initialDeposit, "Opening deposit");
+        }
 
         return Mappers.toAccountResponse(account);
     }
