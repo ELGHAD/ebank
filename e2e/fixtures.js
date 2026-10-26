@@ -52,8 +52,17 @@ export const test = base.extend({
         expect(summary, `axe-core violations on ${label}`).toEqual([]);
       },
       async expectNoHorizontalScroll() {
-        const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-        expect(overflow, "horizontal page overflow (px)").toBeLessThanOrEqual(0);
+        const { overflow, culprits } = await page.evaluate(() => {
+          const width = window.innerWidth;
+          // The deepest elements sticking out (inside a scrollable table region overflowing is fine)
+          const culprits = [...document.querySelectorAll("body *")]
+            .filter((el) => el.getBoundingClientRect().right > width + 0.5 && !el.closest(".tableWrap"))
+            .filter((el, _, all) => !all.some((other) => other !== el && el.contains(other)))
+            .slice(0, 5)
+            .map((el) => `${el.tagName.toLowerCase()}.${el.className} "${el.textContent.trim().slice(0, 40)}"`);
+          return { overflow: document.documentElement.scrollWidth - width, culprits };
+        });
+        expect(overflow, `horizontal page overflow (px), caused by: ${culprits.join(" | ")}`).toBeLessThanOrEqual(0);
       },
     };
     await use(app);
