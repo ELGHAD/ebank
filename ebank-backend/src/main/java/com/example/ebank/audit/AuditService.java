@@ -45,6 +45,12 @@ public class AuditService {
         repository.save(event(organizationId, actor.userId(), actor.username(), type, target, details));
     }
 
+    /** For events of the system itself (scheduled jobs), with no human actor. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordSystem(Long organizationId, AuditEventType type, String target, String details) {
+        repository.save(event(organizationId, null, "system", type, target, details));
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordIndependently(Long organizationId, Long userId, String username, AuditEventType type,
                                     String details) {

@@ -274,3 +274,32 @@ Short records of the significant choices, why they were made and what they cost.
 **Concurrency detail.** "Never disable the last active admin" cannot be broken by a single request, since the caller is itself an active admin. It *can* be broken by two admins disabling each other at the same instant. Staff changes lock the organization row, which serializes them; a concurrency test (and its mutation check) proves it.
 
 **Rejected alternatives.** Schema-per-tenant or database-per-tenant: stronger isolation, but migrations, connection pools and cross-tenant reporting multiply for no benefit at this scale. PostgreSQL row-level security: a valid next step for a third layer, at the cost of setting a session variable per transaction.
+
+---
+
+## ADR-020 — Plans, quotas and simulated billing
+
+**Scope.** The SaaS layer is real in its *rules* and simulated in its *money*. Plans, limits, usage, plan changes, billing periods, invoices and payment states are implemented and enforced. No payment provider is called, no card data exists, and invoices are issued as "paid (simulated)".
+
+**Plans.**
+- **Free, Pro and Enterprise** are reference data in the database. A null limit means unlimited.
+- The application's database role can only **read** plans, and can neither update nor delete invoices (V5 grants + append-only trigger).
+- **Every organization has a subscription**, guaranteed by a database trigger on organization insert rather than only by application code.
+
+**Quotas: where and how.**
+- **Single enforcement point:** one service (`QuotaService`), called by every growth operation: onboarding a client, opening an account, creating or re-enabling staff, and transfers.
+- **Error:** a refusal is `422 QUOTA_EXCEEDED` with the quota, limit and plan, and a message telling the user what to do.
+- **Growth operations** (rare) lock the organization's subscription row, so two concurrent requests can never both take the last slot.
+- **Transfers** (frequent) use one atomic statement instead: `INSERT … ON CONFLICT DO UPDATE SET transfers = transfers + 1 WHERE transfers < limit RETURNING`. Only the monthly counter row is locked, and the increment is part of the transfer's transaction, so a rolled-back transfer is not counted. Lock order stays accounts → counter, so there are no deadlocks.
+- **Evidence:** concurrency tests at the limit (6 onboardings for 2 remaining slots, 12 transfers for 5), each with a mutation check. Without the lock, all 6 onboardings succeeded; without the `WHERE`, all 12 transfers did.
+
+**Plan changes and renewal.**
+- An immediate switch starts a new monthly period; a paid plan issues its invoice.
+- A downgrade is refused while usage exceeds the target plan's limits, with the reason listed.
+- A scheduled job advances ended periods and issues one invoice per period. A unique (organization, period start) constraint makes repeated or concurrent runs (several instances) harmless.
+
+**Payment failure policy.** `PAST_DUE` (simulated by the platform admin, standing in for a payment provider's webhook) blocks **growth** only. Customers keep transferring and reading their history: a bank's billing problem must not lock end customers out of their money. Switching to Free clears the overdue state.
+
+**Simplifications, stated openly.**
+- No proration, taxes or dunning schedule.
+- The demo bank is set to Pro by the demo profile, so shared demos do not hit Free limits.

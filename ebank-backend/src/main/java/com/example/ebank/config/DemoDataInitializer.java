@@ -1,5 +1,7 @@
 package com.example.ebank.config;
 
+import com.example.ebank.billing.PlanRepository;
+import com.example.ebank.billing.SubscriptionRepository;
 import com.example.ebank.entities.AppRole;
 import com.example.ebank.entities.AppUser;
 import com.example.ebank.entities.Organization;
@@ -35,6 +37,8 @@ public class DemoDataInitializer implements ApplicationRunner {
     private final AppUserRepository userRepo;
     private final AppRoleRepository roleRepo;
     private final PasswordEncoder passwordEncoder;
+    private final SubscriptionRepository subscriptionRepo;
+    private final PlanRepository planRepo;
 
     @Override
     @Transactional
@@ -47,6 +51,15 @@ public class DemoDataInitializer implements ApplicationRunner {
                 AppRole.ORG_ADMIN, organization, false);
         createIfMissing(demo.platformAdminUsername(), demo.platformAdminPassword(), "DEMO_PLATFORM_ADMIN_PASSWORD",
                 AppRole.PLATFORM_ADMIN, null, false);
+
+        // The shared demo bank runs on Pro so repeated demos do not hit the Free limits (demo setup, no invoice).
+        // Organizations created afterwards start on Free, where quotas can be demonstrated.
+        subscriptionRepo.findById(organization.getId())
+                .filter(s -> "FREE".equals(s.getPlan().getCode()))
+                .ifPresent(s -> {
+                    s.setPlan(planRepo.findById("PRO").orElseThrow());
+                    log.info("Demo organization '{}' set to the Pro plan", organization.getName());
+                });
     }
 
     private void createIfMissing(String rawUsername, String password, String passwordEnv, String role,

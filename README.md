@@ -15,7 +15,7 @@ A full-stack banking **simulation** built with Spring Boot and React. Agents onb
 | Tenant isolation | Every tenant-scoped endpoint tested with another organization's ids; composite foreign keys reject cross-tenant rows in the database |
 | Transfers to any account of the same bank (by RIB), with review/confirm step | Working, tested (incl. concurrency on real PostgreSQL) |
 | Append-only ledger, paginated and filterable account history | Working, tested |
-| Plans, quotas, simulated billing | Planned |
+| Plans (Free / Pro / Enterprise), server-enforced quotas, usage meters, simulated billing and payment states | Working, tested (incl. quotas under concurrency) |
 | Security hardening: HttpOnly cookie sessions + CSRF, revocation, forced first-login password change, login throttling, CSP, audit trail, least-privilege DB role | Working, tested (incl. a real-browser run) |
 | Agent workspace: client search, client detail, account block / unblock / close, account history, audit log | Working, tested (unit, integration, real browser) |
 | Accessible, responsive UI (axe-core: 0 violations on 12 pages; usable at 375 px) | Verified in headless Chrome |
@@ -24,12 +24,22 @@ A full-stack banking **simulation** built with Spring Boot and React. Agents onb
 
 The full plan, with acceptance criteria, is in [docs/ROADMAP.md](docs/ROADMAP.md). The initial audit is in [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md), and design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
 
+## Plans (simulated SaaS billing)
+
+| Plan | Price | Staff | Clients | Open accounts | Transfers / month |
+|---|---|---|---|---|---|
+| Free | €0 | 3 | 25 | 50 | 200 |
+| Pro | €49 / month (simulated) | 25 | 1,000 | 2,500 | 10,000 |
+| Enterprise | €199 / month (simulated) | unlimited | unlimited | unlimited | unlimited |
+
+Limits are enforced by the server, also under concurrent requests. Billing is **simulated**: no payment provider, no card data. A simulated failed payment (set by the platform admin) blocks growth (new clients, accounts, staff) but never customers' access to their money. The demo bank runs on Pro; banks created afterwards start on Free.
+
 ## Roles
 
 | Role | Scope | Main capabilities |
 |---|---|---|
-| Platform admin | The platform (no organization) | Create organizations with their first admin, suspend / reactivate them. Sees counts only, never customers or money |
-| Bank admin (`ORG_ADMIN`) | One organization | Overview figures, staff management (agents and admins), audit log |
+| Platform admin | The platform (no organization) | Create organizations with their first admin, suspend / reactivate them, simulate payment events. Sees counts and plans only, never customers or money |
+| Bank admin (`ORG_ADMIN`) | One organization | Overview figures, staff management (agents and admins), plan & billing, audit log |
 | Agent | One organization | Clients, accounts, account status, histories, audit log |
 | Client | Own accounts | Accounts, transfers to any account of the same bank, history |
 
@@ -47,6 +57,9 @@ Taken in headless Chrome against the Docker stack (synthetic data).
 
 | **Platform admin: organizations** | **Bank admin: staff** |
 | ![Organizations with counts and lifecycle actions](docs/screenshots/11-platform-organizations.png) | ![Staff management](docs/screenshots/13-org-staff.png) |
+
+| **Bank admin: plan & billing (simulated)** | **Quota reached** |
+| ![Usage meters, plans and invoices](docs/screenshots/15-billing-free.png) | ![A staff member refused by the Free plan's quota](docs/screenshots/14-quota-refused.png) |
 
 More in [docs/screenshots](docs/screenshots), including the 375 px mobile layout.
 
@@ -192,6 +205,9 @@ Secrets live only in `.env` / `application-local.yml`, both git-ignored. `VITE_*
 | `PATCH /api/org/staff/{id}/enabled` | ORG_ADMIN | `{enabled}`; not yourself, never the last active admin |
 | `GET /api/platform/organizations`, `POST /api/platform/organizations` | PLATFORM_ADMIN | List with counts; create `{name, adminEmail}` atomically |
 | `PATCH /api/platform/organizations/{id}/status` | PLATFORM_ADMIN | `{status: ACTIVE\|SUSPENDED}`; suspension cuts all the organization's users off |
+| `PATCH /api/platform/organizations/{id}/subscription-status` | PLATFORM_ADMIN | `{status: ACTIVE\|PAST_DUE}`: simulated payment received / failed |
+| `GET /api/org/plans`, `GET /api/org/subscription` | ORG_ADMIN | Plans; current plan, period, usage per quota, simulated invoices |
+| `PUT /api/org/subscription/plan` | ORG_ADMIN | `{planCode}`; a downgrade is refused while usage exceeds the target plan |
 | `POST /api/admin/clients` | AGENT | Onboard a client → client, username, one-time password |
 | `POST /api/admin/accounts` | AGENT | `{clientId, currency?, initialDeposit?}` → account with generated RIB |
 | `GET /api/admin/clients?q=&page=&size=` | AGENT | Search the organization's clients (name, email, identity reference), with account counts |
@@ -205,7 +221,7 @@ Secrets live only in `.env` / `application-local.yml`, both git-ignored. `VITE_*
 | `GET /api/admin/accounts/{id}/entries` | AGENT | History of any account of the agent's organization |
 | `GET /actuator/health` | public | Liveness/readiness |
 
-Errors use the `application/problem+json` format, for example `{"status":409,"code":"EMAIL_TAKEN","detail":"..."}`.
+Errors use the `application/problem+json` format, for example `{"status":409,"code":"EMAIL_TAKEN","detail":"..."}`. A plan limit answers `422` with `code: QUOTA_EXCEEDED` plus `quota`, `limit` and `plan`.
 
 Browsers authenticate with the session cookie, and every POST needs the `X-XSRF-TOKEN` header. Scripts and API clients can instead send `Authorization: Bearer <token>` (the token is the cookie's value), which needs no CSRF token.
 

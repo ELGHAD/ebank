@@ -28,7 +28,7 @@ public final class OrganizationDtos {
     }
 
     public record OrganizationSummary(Long id, String name, OrganizationStatus status, Instant createdAt,
-                                      long users, long clients, long accounts) {
+                                      long users, long clients, long accounts, String plan, String subscriptionStatus) {
     }
 
     /** The first administrator's one-time password is shown once to the platform admin. */

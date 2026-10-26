@@ -172,7 +172,7 @@ export default function ClientDetailPage() {
         {accounts.length === 0 ? (
           <p className="empty">This client has no account yet.</p>
         ) : (
-          <div className="tableWrap" aria-busy={loading}>
+          <div className="tableWrap" role="region" aria-label="Client accounts" tabIndex={0} aria-busy={loading}>
             <table>
               <thead>
                 <tr>

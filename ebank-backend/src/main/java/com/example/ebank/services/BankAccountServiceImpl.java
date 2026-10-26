@@ -3,6 +3,8 @@ package com.example.ebank.services;
 import com.example.ebank.audit.AuditEventType;
 import com.example.ebank.audit.AuditService;
 import com.example.ebank.banking.MoneyPolicy;
+import com.example.ebank.billing.Quota;
+import com.example.ebank.billing.QuotaService;
 import com.example.ebank.banking.Rib;
 import com.example.ebank.config.AppUserPrincipal;
 import com.example.ebank.dto.AccountResponse;
@@ -34,6 +36,7 @@ public class BankAccountServiceImpl implements BankAccountService {
     private final MoneyPolicy moneyPolicy;
     private final LedgerService ledgerService;
     private final AuditService audit;
+    private final QuotaService quotaService;
 
     /**
      * The initial deposit is recorded as a DEPOSIT ledger entry in the same transaction,
@@ -44,6 +47,7 @@ public class BankAccountServiceImpl implements BankAccountService {
     public AccountResponse openAccount(AppUserPrincipal agent, OpenAccountRequest req) {
         Client client = findClientOfOrganization(agent, req.clientId());
         String currency = moneyPolicy.resolveCurrency(req.currency());
+        quotaService.requireGrowth(agent.organizationId(), Quota.ACCOUNTS);
 
         BankAccount account = new BankAccount();
         account.setOrganization(client.getOrganization());

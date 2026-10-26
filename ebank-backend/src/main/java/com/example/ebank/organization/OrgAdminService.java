@@ -2,6 +2,8 @@ package com.example.ebank.organization;
 
 import com.example.ebank.audit.AuditEventType;
 import com.example.ebank.audit.AuditService;
+import com.example.ebank.billing.Quota;
+import com.example.ebank.billing.QuotaService;
 import com.example.ebank.config.AppUserPrincipal;
 import com.example.ebank.entities.AccountStatus;
 import com.example.ebank.entities.AppRole;
@@ -52,6 +54,7 @@ public class OrgAdminService {
     private final TransferRepository transferRepo;
     private final PasswordEncoder passwordEncoder;
     private final AuditService audit;
+    private final QuotaService quotaService;
 
     @Transactional(readOnly = true)
     public OrganizationOverview overview(AppUserPrincipal admin) {
@@ -90,6 +93,7 @@ public class OrgAdminService {
         if (userRepo.existsByUsername(username)) {
             throw new ConflictException("EMAIL_TAKEN", "A user with this email already exists");
         }
+        quotaService.requireGrowth(admin.organizationId(), Quota.STAFF);
         String temporaryPassword = TemporaryPasswords.generate();
         AppUser user = new AppUser();
         user.setOrganization(organizationRepo.getReferenceById(admin.organizationId()));
@@ -122,6 +126,9 @@ public class OrgAdminService {
         boolean isAdmin = user.getRoles().stream().anyMatch(r -> AppRole.ORG_ADMIN.equals(r.getRoleName()));
         if (!enabled && isAdmin && userRepo.countEnabledWithRole(admin.organizationId(), AppRole.ORG_ADMIN) <= 1) {
             throw new BusinessRuleException("LAST_ORG_ADMIN", "The organization must keep at least one active administrator");
+        }
+        if (enabled) {
+            quotaService.requireGrowth(admin.organizationId(), Quota.STAFF);
         }
         user.setEnabled(enabled);
         audit.record(admin, AuditEventType.STAFF_ENABLED_CHANGED, "user:" + user.getId(),

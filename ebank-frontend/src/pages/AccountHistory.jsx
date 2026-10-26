@@ -100,7 +100,7 @@ export default function AccountHistory({ role = "client" }) {
           <p className="empty">No movements to show.</p>
         ) : data ? (
           <>
-            <div className="tableWrap" aria-busy={loading}>
+            <div className="tableWrap" role="region" aria-label="Account movements" tabIndex={0} aria-busy={loading}>
               <table>
                 <caption className="sr-only">Movements, newest first</caption>
                 <thead>

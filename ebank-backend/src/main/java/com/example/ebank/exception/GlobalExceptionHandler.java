@@ -37,6 +37,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(ex.getStatus(), ex.getCode(), ex.getMessage());
     }
 
+    @ExceptionHandler(QuotaExceededException.class)
+    ResponseEntity<ProblemDetail> handleQuota(QuotaExceededException ex) {
+        ResponseEntity<ProblemDetail> response = problem(ex.getStatus(), ex.getCode(), ex.getMessage());
+        response.getBody().setProperty("quota", ex.getQuota());
+        response.getBody().setProperty("limit", ex.getLimit());
+        response.getBody().setProperty("plan", ex.getPlan());
+        return response;
+    }
+
     @ExceptionHandler(TooManyAttemptsException.class)
     ResponseEntity<ProblemDetail> handleTooManyAttempts(TooManyAttemptsException ex) {
         long seconds = Math.max(1, ex.getRetryAfter().toSeconds() + 1);

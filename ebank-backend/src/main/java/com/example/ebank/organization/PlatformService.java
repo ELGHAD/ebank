@@ -2,6 +2,8 @@ package com.example.ebank.organization;
 
 import com.example.ebank.audit.AuditEventType;
 import com.example.ebank.audit.AuditService;
+import com.example.ebank.billing.Subscription;
+import com.example.ebank.billing.SubscriptionRepository;
 import com.example.ebank.config.AppUserPrincipal;
 import com.example.ebank.dto.PageResponse;
 import com.example.ebank.entities.AppRole;
@@ -47,6 +49,7 @@ public class PlatformService {
     private final BankAccountRepository accountRepo;
     private final PasswordEncoder passwordEncoder;
     private final AuditService audit;
+    private final SubscriptionRepository subscriptionRepo;
 
     /**
      * Creates the organization and its first administrator in one transaction:
@@ -65,7 +68,7 @@ public class PlatformService {
 
         Organization organization = new Organization();
         organization.setName(name);
-        organizationRepo.save(organization);
+        organizationRepo.saveAndFlush(organization); // the database trigger creates its Free subscription
 
         String temporaryPassword = TemporaryPasswords.generate();
         AppUser admin = new AppUser();
@@ -79,7 +82,7 @@ public class PlatformService {
         audit.recordFor(organization.getId(), platformAdmin, AuditEventType.ORGANIZATION_CREATED,
                 "organization:" + organization.getId(), "first administrator " + adminUsername);
         return new CreateOrganizationResponse(new OrganizationSummary(organization.getId(), organization.getName(),
-                organization.getStatus(), organization.getCreatedAt(), 1, 0, 0), adminUsername, temporaryPassword);
+                organization.getStatus(), organization.getCreatedAt(), 1, 0, 0, "FREE", "ACTIVE"), adminUsername, temporaryPassword);
     }
 
     @Transactional(readOnly = true)
@@ -89,10 +92,15 @@ public class PlatformService {
         Map<Long, Long> users = ids.isEmpty() ? Map.of() : toMap(userRepo.countByOrganizationIds(ids));
         Map<Long, Long> clients = ids.isEmpty() ? Map.of() : toMap(clientRepo.countByOrganizationIds(ids));
         Map<Long, Long> accounts = ids.isEmpty() ? Map.of() : toMap(accountRepo.countByOrganizationIds(ids));
+        Map<Long, Subscription> subscriptions = new HashMap<>();
+        if (!ids.isEmpty()) {
+            subscriptionRepo.findByOrganizationIdIn(ids).forEach(s -> subscriptions.put(s.getOrganizationId(), s));
+        }
         return new PageResponse<>(
                 result.getContent().stream().map(o -> new OrganizationSummary(o.getId(), o.getName(), o.getStatus(),
                         o.getCreatedAt(), users.getOrDefault(o.getId(), 0L), clients.getOrDefault(o.getId(), 0L),
-                        accounts.getOrDefault(o.getId(), 0L))).toList(),
+                        accounts.getOrDefault(o.getId(), 0L), planOf(subscriptions.get(o.getId())),
+                        statusOf(subscriptions.get(o.getId())))).toList(),
                 result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
@@ -112,7 +120,17 @@ public class PlatformService {
         Map<Long, Long> accounts = toMap(accountRepo.countByOrganizationIds(List.of(organizationId)));
         return new OrganizationSummary(organization.getId(), organization.getName(), organization.getStatus(),
                 organization.getCreatedAt(), users.getOrDefault(organizationId, 0L),
-                clients.getOrDefault(organizationId, 0L), accounts.getOrDefault(organizationId, 0L));
+                clients.getOrDefault(organizationId, 0L), accounts.getOrDefault(organizationId, 0L),
+                planOf(subscriptionRepo.findById(organizationId).orElse(null)),
+                statusOf(subscriptionRepo.findById(organizationId).orElse(null)));
+    }
+
+    private static String planOf(Subscription s) {
+        return s == null ? null : s.getPlan().getCode();
+    }
+
+    private static String statusOf(Subscription s) {
+        return s == null ? null : s.getStatus().name();
     }
 
     private static Map<Long, Long> toMap(List<Object[]> rows) {

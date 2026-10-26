@@ -115,9 +115,31 @@ Not done: no seeded demo clients (the demo agent creates them); browser checks s
 
 Not done: public self-service sign-up (deliberately; see ADR-019), a platform-level audit view, and an "enable/disable client logins" feature for bank admins.
 
+## Phase 6 — Plans, quotas, simulated billing ✅ (2026-10-26)
+
+| Acceptance criterion | Result | Evidence |
+|---|---|---|
+| Plans as reference data; every organization has a subscription | ✅ | V5 + trigger; the existing Docker volume migrated with 0 organizations left without a subscription |
+| Quotas enforced server-side with a clear 422 | ✅ | `BillingIntegrationTest`: clients (25), staff (incl. re-enabling), transfers (monthly counter); browser: the 4th staff member is refused with the quota message |
+| Quotas hold under concurrency | ✅ | 6 concurrent onboardings for 2 slots, 12 concurrent transfers for 5; **mutation checks** on the subscription lock and the conditional counter both fail as expected |
+| A rolled-back transfer does not consume quota | ✅ | Forced failure after counting: counter unchanged |
+| Plan change: upgrade issues a simulated invoice, downgrade checks usage | ✅ | API test (`PLAN_LIMITS_EXCEEDED` lists the exceeded quotas); browser: upgrade to Pro then the 4th staff member is accepted |
+| Simulated payment failure blocks growth, never money | ✅ | `PAST_DUE`: onboarding/accounts/staff/paid upgrade refused; transfers and history still work; browser end-to-end |
+| Idempotent renewal (missed periods, repeated runs) | ✅ | 3 missed periods → 3 invoices; a second run issues none; Free/past-due periods advance without invoices |
+| Least privilege on billing data | ✅ | The app cannot edit plans or delete invoices; the owner cannot rewrite invoices (trigger) |
+| Billing UI | ✅ | Usage meters (`role="meter"`, severity in words), plan comparison, invoices; platform plan and payment-state controls; frontend 62 tests (all 19 files verified) |
+| Accessibility | ✅ | axe-core: 0 violations on the billing and platform pages; found and fixed `scrollable-region-focusable` (tables overflowing on phones were not keyboard-reachable) for all 8 tables |
+| Suites | ✅ | Backend 187 tests (12 new); real browser: Phase 6 scenario 14/14, regression scenario of the agent and client pages 16/16 (axe-core at 1280 and 375 px) |
+| Robust startup | ✅ | Found: on a loaded machine the backend took 140 s to start, past the healthcheck's ~110 s budget, so Compose refused to start the frontend. The start period is now 180 s (a success during it marks the container healthy at once). The first login after a cold start can also take several seconds (measured 3.4 s, then 0.8 s warm); browser tests must warm up first |
+
+| Dependencies | ⚠️ | New advisories appeared during the phase, all in development tooling (runtime: 0 vulnerabilities). Vite 8.3.1 → 8.3.4 and Vitest 5.0.2 → 5.0.3 fix them. Remaining: `undici` (used only by jsdom inside unit tests, no real network), whose patched 8.12.2 was 11 days old; deferred to respect the two-week release-age rule. Dependabot will propose it |
+
+Not done: proration, taxes, dunning e-mails, a real payment provider (out of scope by design).
+
+Note: the browser scenarios of Phases 4 and 5 were lost when the temporary folder holding them was cleaned. A compact regression scenario was rewritten for this phase. Phase 7 must commit browser tests into the repository.
+
 ## Later phases
 
-6. Plans, quotas, simulated billing.
 7. E2E tests and CI gates (commit the browser scenarios with their axe-core checks as a Playwright suite; warm the backend up before the first login).
 8. AWS deployment (separate cost proposal and approval first).
 9. Observability.

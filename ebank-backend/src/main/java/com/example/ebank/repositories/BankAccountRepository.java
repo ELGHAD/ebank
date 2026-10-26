@@ -1,5 +1,6 @@
 package com.example.ebank.repositories;
 
+import com.example.ebank.entities.AccountStatus;
 import com.example.ebank.entities.BankAccount;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,6 +21,8 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, Long> 
     List<BankAccount> findByClientAppUserIdOrderByIdAsc(Long appUserId);
 
     boolean existsByRib(String rib);
+
+    long countByOrganizationIdAndStatusNot(Long organizationId, AccountStatus status);
 
     /** Rows: [organizationId, count]. */
     @Query("select a.organization.id, count(a) from BankAccount a where a.organization.id in :ids group by a.organization.id")

@@ -16,6 +16,7 @@ import AuditLogPage from "./pages/agent/AuditLogPage";
 import OrganizationsPage from "./pages/platform/OrganizationsPage";
 import OverviewPage from "./pages/org/OverviewPage";
 import StaffPage from "./pages/org/StaffPage";
+import BillingPage from "./pages/org/BillingPage";
 
 const App = () => {
   return (
@@ -58,6 +59,7 @@ const App = () => {
           >
             <Route index element={<OverviewPage />} />
             <Route path="staff" element={<StaffPage />} />
+            <Route path="billing" element={<BillingPage />} />
             <Route path="audit" element={<AuditLogPage />} />
           </Route>
 

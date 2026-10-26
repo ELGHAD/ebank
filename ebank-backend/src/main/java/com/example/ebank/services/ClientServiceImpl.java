@@ -2,6 +2,8 @@ package com.example.ebank.services;
 
 import com.example.ebank.audit.AuditEventType;
 import com.example.ebank.audit.AuditService;
+import com.example.ebank.billing.Quota;
+import com.example.ebank.billing.QuotaService;
 import com.example.ebank.config.AppUserPrincipal;
 import com.example.ebank.dto.ClientDetailsResponse;
 import com.example.ebank.dto.ClientSummaryResponse;
@@ -45,6 +47,7 @@ public class ClientServiceImpl implements ClientService {
     private final PasswordEncoder passwordEncoder;
     private final AuditService audit;
     private final BankAccountRepository accountRepo;
+    private final QuotaService quotaService;
 
     /**
      * Creates the login identity and the client record in one transaction: if any step fails, nothing is kept.
@@ -56,6 +59,7 @@ public class ClientServiceImpl implements ClientService {
         String username = req.email().trim().toLowerCase(Locale.ROOT);
         String identityRef = req.identityRef().trim();
 
+        quotaService.requireGrowth(agent.organizationId(), Quota.CLIENTS);
         if (clientRepo.existsByOrganizationIdAndIdentityRef(agent.organizationId(), identityRef)) {
             throw new ConflictException("IDENTITY_REF_TAKEN", "A client with this identity reference already exists");
         }

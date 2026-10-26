@@ -135,7 +135,7 @@ export default function StaffPage() {
             Loading staff…
           </p>
         ) : data ? (
-          <div className="tableWrap" aria-busy={loading}>
+          <div className="tableWrap" role="region" aria-label="Staff" tabIndex={0} aria-busy={loading}>
             <table>
               <thead>
                 <tr>

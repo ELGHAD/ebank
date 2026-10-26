@@ -7,3 +7,6 @@ app:
   # The IP limit is covered by LoginThrottleTest with a controllable clock.
   login-throttle:
     max-failures-per-ip: 100000
+  # Tests call BillingService.renewDueSubscriptions() directly
+  billing:
+    scheduler-enabled: false

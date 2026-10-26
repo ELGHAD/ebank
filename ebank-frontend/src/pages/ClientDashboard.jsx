@@ -65,7 +65,7 @@ export default function ClientDashboard() {
         ) : accounts.length === 0 ? (
           <p className="empty">You have no account yet. Your bank agent can open one for you.</p>
         ) : (
-          <div className="tableWrap">
+          <div className="tableWrap" role="region" aria-label="Accounts table" tabIndex={0}>
             <table>
               <thead>
                 <tr>

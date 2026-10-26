@@ -3,6 +3,7 @@ package com.example.ebank.transfer;
 import com.example.ebank.audit.AuditEventType;
 import com.example.ebank.audit.AuditService;
 import com.example.ebank.banking.MoneyPolicy;
+import com.example.ebank.billing.QuotaService;
 import com.example.ebank.banking.Rib;
 import com.example.ebank.config.AppUserPrincipal;
 import com.example.ebank.entities.AccountStatus;
@@ -54,6 +55,7 @@ public class TransferService {
     private final AppUserRepository userRepo;
     private final MoneyPolicy moneyPolicy;
     private final AuditService audit;
+    private final QuotaService quotaService;
 
     /** @param replayed true when the result is the original transfer of an idempotent retry */
     public record TransferResult(TransferResponse transfer, boolean replayed) {
@@ -117,7 +119,10 @@ public class TransferService {
             throw new BusinessRuleException("INSUFFICIENT_FUNDS", "Insufficient funds");
         }
 
-        // 6. Apply: balances, transfer, balanced ledger entries — committed together or not at all
+        // 6. Count it against the plan's monthly limit (atomic; rolled back with the transfer if anything fails)
+        quotaService.consumeTransfer(source.getOrganization().getId());
+
+        // 7. Apply: balances, transfer, balanced ledger entries — committed together or not at all
         source.setBalance(source.getBalance().subtract(amount));
         destination.setBalance(destination.getBalance().add(amount));
         accountRepo.flush();

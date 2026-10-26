@@ -67,7 +67,7 @@ export default function AuditLogPage() {
           <p className="empty">No events to show.</p>
         ) : data ? (
           <>
-            <div className="tableWrap" aria-busy={loading}>
+            <div className="tableWrap" role="region" aria-label="Audit events" tabIndex={0} aria-busy={loading}>
               <table>
                 <caption className="sr-only">Audit events, newest first</caption>
                 <thead>

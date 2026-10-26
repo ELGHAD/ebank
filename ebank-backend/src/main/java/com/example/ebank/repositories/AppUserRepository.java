@@ -29,6 +29,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, Long> {
             + "and r.roleName = :role and u.enabled = true")
     long countEnabledWithRole(@Param("organizationId") Long organizationId, @Param("role") String role);
 
+    /** Enabled staff (agents and organization admins) of an organization: what the STAFF quota counts. */
+    @Query("select count(distinct u) from AppUser u join u.roles r where u.organization.id = :organizationId "
+            + "and r.roleName in ('AGENT', 'ORG_ADMIN') and u.enabled = true")
+    long countEnabledStaff(@Param("organizationId") Long organizationId);
+
     /** Rows: [organizationId, count]. */
     @Query("select u.organization.id, count(u) from AppUser u where u.organization.id in :ids group by u.organization.id")
     List<Object[]> countByOrganizationIds(@Param("ids") Collection<Long> ids);

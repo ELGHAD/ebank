@@ -86,7 +86,7 @@ export default function ClientsPage() {
           </p>
         ) : data ? (
           <>
-            <div className="tableWrap" aria-busy={loading}>
+            <div className="tableWrap" role="region" aria-label="Clients" tabIndex={0} aria-busy={loading}>
               <table>
                 <caption className="sr-only">Clients, sorted by last name</caption>
                 <thead>

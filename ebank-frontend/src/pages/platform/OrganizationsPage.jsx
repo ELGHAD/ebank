@@ -5,7 +5,12 @@ import ConfirmButton from "../../components/ConfirmButton";
 import OneTimePassword from "../../components/OneTimePassword";
 import useQuery from "../../hooks/useQuery";
 import { errorMessage, fieldErrors } from "../../api/errors";
-import { changeOrganizationStatus, createOrganization, listOrganizations } from "../../services/adminServices";
+import {
+  changeOrganizationStatus,
+  changeSubscriptionStatus,
+  createOrganization,
+  listOrganizations,
+} from "../../services/adminServices";
 import { formatDateTime } from "../../utils/format";
 
 function CreateOrganizationForm({ onCreated }) {
@@ -102,6 +107,22 @@ export default function OrganizationsPage() {
     }
   };
 
+  const setPayment = async (org, status) => {
+    setNotice("");
+    setActionError("");
+    try {
+      await changeSubscriptionStatus(org.id, status);
+      setNotice(
+        status === "PAST_DUE"
+          ? `Simulated failed payment for ${org.name}: its growth is blocked until payment is recorded.`
+          : `Simulated payment recorded for ${org.name}.`,
+      );
+      reload();
+    } catch (err) {
+      setActionError(errorMessage(err, "The subscription status could not be changed."));
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -154,12 +175,13 @@ export default function OrganizationsPage() {
           <p className="empty">No organization yet.</p>
         ) : data ? (
           <>
-            <div className="tableWrap" aria-busy={loading}>
+            <div className="tableWrap" role="region" aria-label="Organizations" tabIndex={0} aria-busy={loading}>
               <table>
                 <thead>
                   <tr>
                     <th scope="col">Name</th>
                     <th scope="col">Status</th>
+                    <th scope="col">Plan</th>
                     <th scope="col">Users</th>
                     <th scope="col">Clients</th>
                     <th scope="col">Accounts</th>
@@ -176,27 +198,48 @@ export default function OrganizationsPage() {
                           {o.status === "ACTIVE" ? "Active" : "Suspended"}
                         </span>
                       </td>
+                      <td>
+                        {o.plan ?? "-"}{" "}
+                        {o.subscriptionStatus === "PAST_DUE" && <span className="badge badge-warn">Payment overdue</span>}
+                      </td>
                       <td>{o.users}</td>
                       <td>{o.clients}</td>
                       <td>{o.accounts}</td>
                       <td>{formatDateTime(o.createdAt)}</td>
                       <td>
-                        {o.status === "ACTIVE" ? (
-                          <ConfirmButton
-                            label="Suspend"
-                            question={`Suspend ${o.name}? All its users lose access.`}
-                            confirmLabel="Suspend"
-                            danger
-                            onConfirm={() => setStatus(o, "SUSPENDED")}
-                          />
-                        ) : (
-                          <ConfirmButton
-                            label="Reactivate"
-                            question={`Reactivate ${o.name}?`}
-                            confirmLabel="Reactivate"
-                            onConfirm={() => setStatus(o, "ACTIVE")}
-                          />
-                        )}
+                        <div className="actions">
+                          {o.status === "ACTIVE" ? (
+                            <ConfirmButton
+                              label="Suspend"
+                              question={`Suspend ${o.name}? All its users lose access.`}
+                              confirmLabel="Suspend"
+                              danger
+                              onConfirm={() => setStatus(o, "SUSPENDED")}
+                            />
+                          ) : (
+                            <ConfirmButton
+                              label="Reactivate"
+                              question={`Reactivate ${o.name}?`}
+                              confirmLabel="Reactivate"
+                              onConfirm={() => setStatus(o, "ACTIVE")}
+                            />
+                          )}
+                          {o.subscriptionStatus === "PAST_DUE" ? (
+                            <ConfirmButton
+                              label="Record payment"
+                              question={`Record a (simulated) payment for ${o.name}?`}
+                              confirmLabel="Record payment"
+                              onConfirm={() => setPayment(o, "ACTIVE")}
+                            />
+                          ) : (
+                            <ConfirmButton
+                              label="Simulate failed payment"
+                              question={`Simulate a failed payment for ${o.name}?`}
+                              confirmLabel="Simulate"
+                              onConfirm={() => setPayment(o, "PAST_DUE")}
+                            />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

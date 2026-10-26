@@ -52,6 +52,10 @@ app:
     window: 15m
   cors:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
+  billing:
+    # Renewal job: advances billing periods and issues simulated invoices
+    scheduler-enabled: true
+    renewal-interval: 1h
   banking:
     default-currency: MAD
     supported-currencies: MAD,EUR,USD

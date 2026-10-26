@@ -8,6 +8,7 @@ const NAV = {
   ORG_ADMIN: [
     { to: "/org", label: "Overview", end: true },
     { to: "/org/staff", label: "Staff" },
+    { to: "/org/billing", label: "Plan & billing" },
     { to: "/org/audit", label: "Audit log" },
   ],
   AGENT: [
