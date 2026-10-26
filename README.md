@@ -118,7 +118,7 @@ Design decisions and trade-offs: [ADR-010 (ledger)](docs/DECISIONS.md#adr-010--l
 | Backend | Java 21, Spring Boot 4.1, Spring Security 7, Spring Data JPA (Hibernate 7), Bean Validation, jjwt 0.13 |
 | Database | PostgreSQL 18, Flyway |
 | Frontend | React 19, React Router 7, Axios, Vite 8 |
-| Tests | JUnit 5, Spring MockMvc, Testcontainers (PostgreSQL), Vitest, Testing Library |
+| Tests | JUnit 5, Spring MockMvc, Testcontainers (PostgreSQL), JaCoCo (report), Vitest, Testing Library, Playwright + axe-core (end-to-end) |
 | Delivery | Docker (multi-stage, non-root images), Docker Compose, GitHub Actions, Dependabot |
 
 ## Run with Docker (recommended)
@@ -169,10 +169,22 @@ npm run dev                                                     # http://localho
 
 ```bash
 cd ebank-backend && ./mvnw verify            # unit + integration tests; needs Docker for Testcontainers
+                                             # coverage report: target/site/jacoco/index.html
 cd ebank-frontend && npm run lint && npm test && npm run build
 ```
 
-CI runs the same commands on every push and pull request (`.github/workflows/ci.yml`).
+End-to-end tests (`e2e/`) drive a real browser against the running Docker stack: agent and client journey with a transfer, tenant isolation and suspension, plan limits / upgrade / failed payment, an axe-core scan of every page at 1280 px and 375 px, and the security headers. Every test also fails on a console error or CSP violation. They need all three demo passwords set in `.env`.
+
+```bash
+docker compose up --build -d --wait
+cd e2e && npm ci
+npx playwright install chromium              # or set PW_CHANNEL=chrome to use an installed Chrome
+E2E_AGENT_PASSWORD=... E2E_ORG_ADMIN_PASSWORD=... E2E_PLATFORM_PASSWORD=... npx playwright test
+```
+
+The tests create their own uniquely named banks and clients, so they can run repeatedly against the same database.
+
+CI (`.github/workflows/ci.yml`) runs on every push, on pull requests to `main` and on demand: backend, frontend, image builds, then the end-to-end suite against a Compose stack started with secrets generated for that run.
 
 ## Configuration
 

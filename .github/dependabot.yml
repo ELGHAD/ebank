@@ -12,6 +12,13 @@ updates:
     groups:
       dev-tooling:
         dependency-type: development
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+    groups:
+      playwright:
+        patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     schedule:

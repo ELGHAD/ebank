@@ -109,7 +109,8 @@ const LoginPage = () => {
             </div>
           )}
 
-          <button type="submit" className="primary-btn" disabled={loading}>
+          {/* Until the session restore has obtained the CSRF cookie, a login would be refused */}
+          <button type="submit" className="primary-btn" disabled={loading || auth.status === "loading"}>
             {loading ? "Signing in..." : "Login"}
           </button>
         </form>

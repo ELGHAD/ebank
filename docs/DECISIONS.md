@@ -303,3 +303,24 @@ Short records of the significant choices, why they were made and what they cost.
 **Simplifications, stated openly.**
 - No proration, taxes or dunning schedule.
 - The demo bank is set to Pro by the demo profile, so shared demos do not hit Free limits.
+
+## ADR-021 — End-to-end tests: Playwright against the real Compose stack
+
+**Context.** Phases 1–6 were verified in a real browser with throwaway scripts. They found real bugs (the Nginx `Host` header, overflow on phones, unreachable scrollable tables), but they lived outside the repository and were lost once. CI had never run a browser.
+
+**Decision.**
+- A separate `e2e/` package with Playwright and `@axe-core/playwright`, so the application's own dependencies stay untouched.
+- It runs against the **production images** (`docker compose up`): Nginx, CSP, cookies, CSRF, Flyway and the restricted database role are all on the tested path. Nothing is mocked.
+- Journeys are written against accessible names (labels, roles), so the tests also check that the UI can be used without seeing it.
+- Every test fails on a console error or CSP violation. axe-core fails on any violation, of any impact.
+- Tests create their own uniquely named data, so reruns against the same database work. They run one at a time because they share the demo bank and the platform.
+- `retries: 0`: a flaky end-to-end test is a defect to understand, not to retry away.
+- A global setup waits for the stack and warms the JVM up (the first login after a cold start was measured at several seconds).
+- In CI, secrets are generated per run, masked, and thrown away with the stack (`down --volumes`). On failure the Playwright report, traces and container logs are uploaded.
+
+**Found by the suite on its first run.** The login form could be submitted before the SPA had obtained its CSRF cookie, which was refused with "Missing or invalid CSRF token". The button now stays disabled until the session restore finishes, with a unit test that fails without the fix.
+
+**Coverage.** JaCoCo produces a report but has no threshold: a percentage gate encourages tests written for the number. The quality gates are the suites themselves and the mutation checks recorded per phase.
+
+**Trade-off.** The end-to-end job adds several minutes to CI and runs only after the fast jobs pass.
+
