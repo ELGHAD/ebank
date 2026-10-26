@@ -138,9 +138,31 @@ Not done: proration, taxes, dunning e-mails, a real payment provider (out of sco
 
 Note: the browser scenarios of Phases 4 and 5 were lost when the temporary folder holding them was cleaned. A compact regression scenario was rewritten for this phase. Phase 7 must commit browser tests into the repository.
 
+## Phase 7 — End-to-end tests and CI gates ✅ (2026-10-26)
+
+| Acceptance criterion | Result | Evidence |
+|---|---|---|
+| Browser tests committed to the repository | ✅ | `e2e/`: Playwright 1.64 + axe-core, 13 tests against the real Compose stack (Nginx, CSP, cookies, CSRF, PostgreSQL, restricted DB role) |
+| Main journeys covered | ✅ | Agent onboards two clients → first sign-in → transfer with review step and client-side validation → both balances and the history; client refused on staff pages **and** staff APIs (403); new bank isolated, suspended and reactivated; Free limit → upgrade with simulated invoice → failed payment blocks growth → payment recorded |
+| Accessibility gate | ✅ | axe-core, any impact, on every page of every role at 1280 and 375 px, plus a no-horizontal-scroll check that names the overflowing elements |
+| Console / CSP gate | ✅ | Every test fails on a console error or CSP violation; security headers asserted |
+| CI runs on every push, PRs to `main`, on demand | ✅ | First CI runs of the repository. [Run 40352475625](https://github.com/ELGHAD/ebank/actions/runs/40352475625): backend 1.6 min, frontend 0.4 min, images 1.4 min, end-to-end 12.9 min, all green |
+| CI secrets | ✅ | Generated per run, masked, destroyed with the stack (`down --volumes`); no repository secret needed |
+| Failure diagnostics | ✅ | Failures as public annotations (Playwright `github` reporter); report, traces and container logs uploaded |
+| Coverage | ✅ (report only) | JaCoCo: 94.3 % instructions, 83.6 % branches; uploaded as a CI artifact; no threshold (ADR-021) |
+| Suites | ✅ | Backend 187, frontend 63 (all 19 files verified), end-to-end 13; local end-to-end runs: 13/13 three times, plus once on a fresh database with headless Chromium |
+
+**Real defects found by the suite:**
+1. **Login before the CSRF cookie** (locally, first run): a login submitted right after the page loaded was refused with "Missing or invalid CSRF token". Login now waits for the session restore; a unit test fails without the fix.
+2. **Overflow on phones under Linux fonts** (on GitHub only): the client detail page overflowed by 31 px at 375 px. A no-wrap badge ("Temporary password not changed yet") forced the summary's value column wider than the card. The developer machine's fonts hid it. Reproduced locally with a wide font (32 px before, 0 after), then fixed in CSS.
+
+**Honest notes:**
+- One local run had a timeout in the longest test while the backend suite was running on the same machine. That test now has 3× the time budget (`test.slow()`). There are no retries.
+- The end-to-end job is the slowest gate (about 13 minutes on a 2-vCPU runner).
+- A Linux Playwright container on this Windows machine was too slow to serve as a reproduction environment, so CI annotations were used instead.
+
 ## Later phases
 
-7. E2E tests and CI gates (commit the browser scenarios with their axe-core checks as a Playwright suite; warm the backend up before the first login).
 8. AWS deployment (separate cost proposal and approval first).
 9. Observability.
 10. Portfolio documentation.

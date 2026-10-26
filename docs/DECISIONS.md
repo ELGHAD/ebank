@@ -318,7 +318,7 @@ Short records of the significant choices, why they were made and what they cost.
 - A global setup waits for the stack and warms the JVM up (the first login after a cold start was measured at several seconds).
 - In CI, secrets are generated per run, masked, and thrown away with the stack (`down --volumes`). On failure the Playwright report, traces and container logs are uploaded.
 
-**Found by the suite on its first run.** The login form could be submitted before the SPA had obtained its CSRF cookie, which was refused with "Missing or invalid CSRF token". The button now stays disabled until the session restore finishes, with a unit test that fails without the fix.
+**Found by the suite on its first run.** The login form could be submitted before the SPA had obtained its CSRF cookie, which was refused with "Missing or invalid CSRF token". The button now stays disabled until the session restore finishes, with a unit test that fails without the fix. On GitHub's Linux runner it then found a 31 px horizontal overflow on the client detail page at 375 px, hidden locally by Windows fonts: browser tests catch environment-dependent layout bugs only if they run in more than one environment.
 
 **Coverage.** JaCoCo produces a report but has no threshold: a percentage gate encourages tests written for the number. The quality gates are the suites themselves and the mutation checks recorded per phase.
 
