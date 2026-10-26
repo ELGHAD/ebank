@@ -12,16 +12,28 @@ A full-stack banking **simulation** built with Spring Boot and React. Agents onb
 | Client onboarding by an agent (one-time password) | Working, tested |
 | Account opening (server-generated RIB, currency, initial deposit) | Working, tested |
 | Client account overview | Working, tested |
-| Tenant isolation (organization scoping) | Foundation in place and tested; a single "Demo Bank" organization is seeded |
+| Tenant isolation | Every tenant-scoped endpoint tested with another organization's ids; composite foreign keys reject cross-tenant rows in the database |
 | Transfers to any account of the same bank (by RIB), with review/confirm step | Working, tested (incl. concurrency on real PostgreSQL) |
 | Append-only ledger, paginated and filterable account history | Working, tested |
-| Multi-tenant administration, plans and quotas | Planned |
+| Plans, quotas, simulated billing | Planned |
 | Security hardening: HttpOnly cookie sessions + CSRF, revocation, forced first-login password change, login throttling, CSP, audit trail, least-privilege DB role | Working, tested (incl. a real-browser run) |
 | Agent workspace: client search, client detail, account block / unblock / close, account history, audit log | Working, tested (unit, integration, real browser) |
-| Accessible, responsive UI (axe-core: 0 violations on 8 pages; usable at 375 px) | Verified in headless Chrome |
+| Accessible, responsive UI (axe-core: 0 violations on 12 pages; usable at 375 px) | Verified in headless Chrome |
+| Multi-tenant platform: platform admin provisions / suspends banks; bank admins manage staff and see an overview | Working, tested (incl. cross-tenant matrix and database-level isolation) |
 | Cloud deployment | Not deployed |
 
 The full plan, with acceptance criteria, is in [docs/ROADMAP.md](docs/ROADMAP.md). The initial audit is in [docs/PROJECT_AUDIT.md](docs/PROJECT_AUDIT.md), and design decisions are in [docs/DECISIONS.md](docs/DECISIONS.md).
+
+## Roles
+
+| Role | Scope | Main capabilities |
+|---|---|---|
+| Platform admin | The platform (no organization) | Create organizations with their first admin, suspend / reactivate them. Sees counts only, never customers or money |
+| Bank admin (`ORG_ADMIN`) | One organization | Overview figures, staff management (agents and admins), audit log |
+| Agent | One organization | Clients, accounts, account status, histories, audit log |
+| Client | Own accounts | Accounts, transfers to any account of the same bank, history |
+
+Every account created for someone else (organization admin, staff, client) gets a one-time password that must be replaced at first sign-in.
 
 ## Screenshots
 
@@ -32,6 +44,9 @@ Taken in headless Chrome against the Docker stack (synthetic data).
 | ![Client detail with accounts and status actions](docs/screenshots/04-client-detail.png) | ![Transfer confirmation with the new balance](docs/screenshots/08-transfer-done.png) |
 | **Agent: audit log** | **Client: account history** |
 | ![Audit log of the organization](docs/screenshots/05-audit-log.png) | ![Account history with running balance](docs/screenshots/09-history.png) |
+
+| **Platform admin: organizations** | **Bank admin: staff** |
+| ![Organizations with counts and lifecycle actions](docs/screenshots/11-platform-organizations.png) | ![Staff management](docs/screenshots/13-org-staff.png) |
 
 More in [docs/screenshots](docs/screenshots), including the 375 px mobile layout.
 
@@ -105,7 +120,13 @@ docker compose up --build -d --wait
 
 > **Upgrading from an earlier checkout?** Since Phase 3 the database volume must be created with the restricted application role: run `docker compose down -v` once. This deletes the demo data.
 
-Open http://localhost:3000 and sign in as the demo agent, `agent@demo.ebank.test`, with the `DEMO_AGENT_PASSWORD` from your `.env`. As the agent:
+Open http://localhost:3000. Demo accounts (passwords from your `.env`):
+
+- Agent: `agent@demo.ebank.test` (`DEMO_AGENT_PASSWORD`).
+- Bank admin: `admin@demo.ebank.test` (`DEMO_ORG_ADMIN_PASSWORD`, optional).
+- Platform admin: `platform@ebank.test` (`DEMO_PLATFORM_ADMIN_PASSWORD`, optional).
+
+As the agent:
 1. Onboard a client. The response shows the client's **one-time password**, once.
 2. Open an account for that client.
 3. Open a second account (same currency) for another client.
@@ -151,6 +172,7 @@ CI runs the same commands on every push and pull request (`.github/workflows/ci.
 | `APP_JWT_EXPIRATION` | backend | Token lifetime, e.g. `60m` |
 | `SPRING_PROFILES_ACTIVE` | backend | `demo` seeds the demo agent |
 | `DEMO_AGENT_USERNAME`, `DEMO_AGENT_PASSWORD` | backend | Demo agent credentials (no built-in default password) |
+| `DEMO_ORG_ADMIN_*`, `DEMO_PLATFORM_ADMIN_*` | backend | Optional demo bank admin and platform admin (created only when a password is set) |
 | `FRONTEND_PORT` | frontend | Host port, default 3000 |
 
 Secrets live only in `.env` / `application-local.yml`, both git-ignored. `VITE_*` variables are embedded in the public JavaScript bundle and must never hold secrets.
@@ -164,7 +186,12 @@ Secrets live only in `.env` / `application-local.yml`, both git-ignored. `VITE_*
 | `GET /api/auth/me` | any | Current user (id, username, roles, organization, `passwordChangeRequired`) |
 | `POST /api/auth/password` | any | `{currentPassword, newPassword}`; revokes other sessions, sets a new cookie |
 | `POST /api/auth/logout` | any | Revokes all the user's sessions and clears the cookie |
-| `GET /api/admin/audit-events` | AGENT | Audit trail of the agent's organization (`page`, `size`, `type`) |
+| `GET /api/admin/audit-events` | AGENT, ORG_ADMIN | Audit trail of the caller's organization (`page`, `size`, `type`) |
+| `GET /api/org/overview` | ORG_ADMIN | Counts, balances per currency, transfers of the last 30 days |
+| `GET /api/org/staff`, `POST /api/org/staff` | ORG_ADMIN | List staff; create an agent or admin `{email, role}` with a one-time password |
+| `PATCH /api/org/staff/{id}/enabled` | ORG_ADMIN | `{enabled}`; not yourself, never the last active admin |
+| `GET /api/platform/organizations`, `POST /api/platform/organizations` | PLATFORM_ADMIN | List with counts; create `{name, adminEmail}` atomically |
+| `PATCH /api/platform/organizations/{id}/status` | PLATFORM_ADMIN | `{status: ACTIVE\|SUSPENDED}`; suspension cuts all the organization's users off |
 | `POST /api/admin/clients` | AGENT | Onboard a client → client, username, one-time password |
 | `POST /api/admin/accounts` | AGENT | `{clientId, currency?, initialDeposit?}` → account with generated RIB |
 | `GET /api/admin/clients?q=&page=&size=` | AGENT | Search the organization's clients (name, email, identity reference), with account counts |
@@ -187,7 +214,7 @@ Browsers authenticate with the session cookie, and every POST needs the `X-XSRF-
 - No transfer reversals, scheduled transfers or FX; transfers are same-currency only.
 - Login throttling is in memory (per instance, reset on restart). There is no refresh token: users sign in again when the session expires (60 minutes by default).
 - Locally there is no HTTPS (and therefore no HSTS); that belongs to the deployment's TLS entry point.
-- Single seeded organization; organization management comes later.
+- Organizations are created by the platform admin; there is no public self-service sign-up.
 
 ## License
 

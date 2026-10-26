@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +20,19 @@ public interface BankAccountRepository extends JpaRepository<BankAccount, Long> 
     List<BankAccount> findByClientAppUserIdOrderByIdAsc(Long appUserId);
 
     boolean existsByRib(String rib);
+
+    /** Rows: [organizationId, count]. */
+    @Query("select a.organization.id, count(a) from BankAccount a where a.organization.id in :ids group by a.organization.id")
+    List<Object[]> countByOrganizationIds(@Param("ids") Collection<Long> ids);
+
+    /** Rows: [status, count]. */
+    @Query("select a.status, count(a) from BankAccount a where a.organization.id = :organizationId group by a.status")
+    List<Object[]> countByStatus(@Param("organizationId") Long organizationId);
+
+    /** Rows: [currency, total balance]. */
+    @Query("select a.currency, sum(a.balance) from BankAccount a where a.organization.id = :organizationId "
+            + "group by a.currency order by a.currency")
+    List<Object[]> sumBalancesByCurrency(@Param("organizationId") Long organizationId);
 
     // Ownership / tenancy checks that do not load the entity (see TransferService for why that matters)
     boolean existsByIdAndClientAppUserId(Long id, Long appUserId);

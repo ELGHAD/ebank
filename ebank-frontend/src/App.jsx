@@ -13,6 +13,9 @@ import ClientsPage from "./pages/agent/ClientsPage";
 import OnboardClientPage from "./pages/agent/OnboardClientPage";
 import ClientDetailPage from "./pages/agent/ClientDetailPage";
 import AuditLogPage from "./pages/agent/AuditLogPage";
+import OrganizationsPage from "./pages/platform/OrganizationsPage";
+import OverviewPage from "./pages/org/OverviewPage";
+import StaffPage from "./pages/org/StaffPage";
 
 const App = () => {
   return (
@@ -31,6 +34,32 @@ const App = () => {
               </ProtectedRoute>
             }
           />
+
+          {/* Platform administration: organization lifecycle only */}
+          <Route
+            path="/platform"
+            element={
+              <ProtectedRoute requiredRole="PLATFORM_ADMIN">
+                <AppShell />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<OrganizationsPage />} />
+          </Route>
+
+          {/* Organization administration */}
+          <Route
+            path="/org"
+            element={
+              <ProtectedRoute requiredRole="ORG_ADMIN">
+                <AppShell />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<OverviewPage />} />
+            <Route path="staff" element={<StaffPage />} />
+            <Route path="audit" element={<AuditLogPage />} />
+          </Route>
 
           {/* Agent workspace */}
           <Route

@@ -17,7 +17,7 @@ public class AuditController {
 
     private final AuditService auditService;
 
-    /** Audit trail of the agent's organization, newest first. */
+    /** Audit trail of the caller's organization (agents and organization admins), newest first. */
     @GetMapping("/api/admin/audit-events")
     public PageResponse<AuditEventResponse> list(@AuthenticationPrincipal AppUserPrincipal agent,
                                                  @RequestParam(required = false) AuditEventType type,

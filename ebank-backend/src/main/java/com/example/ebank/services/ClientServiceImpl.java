@@ -29,8 +29,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -39,8 +37,6 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class ClientServiceImpl implements ClientService {
-
-    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final ClientRepository clientRepo;
     private final AppUserRepository userRepo;
@@ -68,7 +64,7 @@ public class ClientServiceImpl implements ClientService {
         }
 
         Organization organization = organizationRepo.getReferenceById(agent.organizationId());
-        String temporaryPassword = generateTemporaryPassword();
+        String temporaryPassword = TemporaryPasswords.generate();
 
         AppUser user = new AppUser();
         user.setOrganization(organization);
@@ -134,10 +130,4 @@ public class ClientServiceImpl implements ClientService {
                         .stream().map(Mappers::toAccountResponse).toList());
     }
 
-    /** 96 random bits, URL-safe Base64 (16 characters). */
-    private static String generateTemporaryPassword() {
-        byte[] bytes = new byte[12];
-        RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
 }

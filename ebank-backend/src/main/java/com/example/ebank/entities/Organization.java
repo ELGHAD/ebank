@@ -19,8 +19,16 @@ public class Organization {
     @Column(nullable = false, unique = true, length = 120)
     private String name;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private OrganizationStatus status = OrganizationStatus.ACTIVE;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    public boolean isActive() {
+        return status == OrganizationStatus.ACTIVE;
+    }
 
     @PrePersist
     void onCreate() {

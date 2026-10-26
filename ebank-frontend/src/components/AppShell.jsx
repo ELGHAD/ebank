@@ -4,6 +4,12 @@ import { useAuth } from "../context/AuthContext";
 import "../styles/app.css";
 
 const NAV = {
+  PLATFORM_ADMIN: [{ to: "/platform", label: "Organizations", end: true }],
+  ORG_ADMIN: [
+    { to: "/org", label: "Overview", end: true },
+    { to: "/org/staff", label: "Staff" },
+    { to: "/org/audit", label: "Audit log" },
+  ],
   AGENT: [
     { to: "/admin", label: "Clients", end: true },
     { to: "/admin/clients/new", label: "Onboard client" },
@@ -14,6 +20,9 @@ const NAV = {
     { to: "/client/transfer", label: "New transfer" },
   ],
 };
+
+const ROLE_LABELS = { PLATFORM_ADMIN: "Platform admin", ORG_ADMIN: "Bank admin", AGENT: "Agent", CLIENT: "Client" };
+const HOME = { PLATFORM_ADMIN: "/platform", ORG_ADMIN: "/org", AGENT: "/admin", CLIENT: "/client" };
 
 /** Layout of every signed-in page: skip link, header with role-based navigation, main landmark, footer. */
 export default function AppShell() {
@@ -31,7 +40,7 @@ export default function AppShell() {
         Skip to content
       </a>
       <header className="app-header">
-        <Link className="brand" to={auth.role === "AGENT" ? "/admin" : "/client"}>
+        <Link className="brand" to={HOME[auth.role] ?? "/"}>
           <span className="brand-logo" aria-hidden="true">
             eB
           </span>
@@ -50,7 +59,7 @@ export default function AppShell() {
         </nav>
         <div className="user-menu">
           <span>
-            {auth.username} ({auth.role === "AGENT" ? "Agent" : "Client"})
+            {auth.username} ({ROLE_LABELS[auth.role] ?? auth.role})
           </span>
           <Link className="btn btnSmall" to="/change-password">
             Change password

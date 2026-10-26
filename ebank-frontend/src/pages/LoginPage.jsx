@@ -5,8 +5,17 @@ import { errorMessage } from "../api/errors";
 import { useAuth } from "../context/AuthContext";
 import "../styles/auth.css";
 
+const HOME_BY_ROLE = [
+  ["PLATFORM_ADMIN", "/platform"],
+  ["ORG_ADMIN", "/org"],
+  ["AGENT", "/admin"],
+  ["CLIENT", "/client"],
+];
+
 export const homeFor = (user) =>
-  user.passwordChangeRequired ? "/change-password" : user.roles.includes("AGENT") ? "/admin" : "/client";
+  user.passwordChangeRequired
+    ? "/change-password"
+    : (HOME_BY_ROLE.find(([role]) => user.roles.includes(role))?.[1] ?? "/login");
 
 const LoginPage = () => {
   const [form, setForm] = useState({ username: "", password: "" });

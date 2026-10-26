@@ -9,6 +9,8 @@ import lombok.*;
 public class AppRole {
     public static final String AGENT = "AGENT";
     public static final String CLIENT = "CLIENT";
+    public static final String ORG_ADMIN = "ORG_ADMIN";
+    public static final String PLATFORM_ADMIN = "PLATFORM_ADMIN";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

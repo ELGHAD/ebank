@@ -19,8 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Locale;
 
 /**
- * Creates the demo agent account. Active only with the "demo" profile, and never with a built-in password:
- * the password must come from configuration (env DEMO_AGENT_PASSWORD).
+ * Creates the demo staff accounts. Active only with the "demo" profile, and never with a built-in password:
+ * passwords come from configuration (env DEMO_AGENT_PASSWORD, DEMO_ORG_ADMIN_PASSWORD, DEMO_PLATFORM_ADMIN_PASSWORD).
  */
 @Component
 @Profile("demo")
@@ -39,24 +39,39 @@ public class DemoDataInitializer implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        String username = demo.agentUsername().trim().toLowerCase(Locale.ROOT);
-        if (userRepo.existsByUsername(username)) {
-            return;
-        }
-        if (demo.agentPassword() == null || demo.agentPassword().length() < MIN_PASSWORD_LENGTH) {
-            throw new IllegalStateException("The demo profile requires app.demo.agent-password (env DEMO_AGENT_PASSWORD) "
-                    + "of at least " + MIN_PASSWORD_LENGTH + " characters");
-        }
-
         Organization organization = organizationRepo.findByName(demo.organizationName())
                 .orElseThrow(() -> new IllegalStateException("Organization not found: " + demo.organizationName()));
 
-        AppUser agent = new AppUser();
-        agent.setOrganization(organization);
-        agent.setUsername(username);
-        agent.setPasswordHash(passwordEncoder.encode(demo.agentPassword()));
-        agent.getRoles().add(roleRepo.findByRoleName(AppRole.AGENT).orElseThrow());
-        userRepo.save(agent);
-        log.info("Demo agent '{}' created in organization '{}'", username, organization.getName());
+        createIfMissing(demo.agentUsername(), demo.agentPassword(), "DEMO_AGENT_PASSWORD", AppRole.AGENT, organization, true);
+        createIfMissing(demo.orgAdminUsername(), demo.orgAdminPassword(), "DEMO_ORG_ADMIN_PASSWORD",
+                AppRole.ORG_ADMIN, organization, false);
+        createIfMissing(demo.platformAdminUsername(), demo.platformAdminPassword(), "DEMO_PLATFORM_ADMIN_PASSWORD",
+                AppRole.PLATFORM_ADMIN, null, false);
+    }
+
+    private void createIfMissing(String rawUsername, String password, String passwordEnv, String role,
+                                 Organization organization, boolean required) {
+        String username = rawUsername.trim().toLowerCase(Locale.ROOT);
+        if (userRepo.existsByUsername(username)) {
+            return;
+        }
+        if (password == null || password.isBlank()) {
+            if (required) {
+                throw new IllegalStateException("The demo profile requires " + passwordEnv);
+            }
+            log.info("Demo {} not created: {} is not set", role, passwordEnv);
+            return;
+        }
+        if (password.length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalStateException(passwordEnv + " must be at least " + MIN_PASSWORD_LENGTH + " characters");
+        }
+        AppUser user = new AppUser();
+        user.setOrganization(organization);
+        user.setUsername(username);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.getRoles().add(roleRepo.findByRoleName(role).orElseThrow());
+        userRepo.save(user);
+        log.info("Demo {} '{}' created{}", role, username,
+                organization == null ? " (platform level)" : " in organization '" + organization.getName() + "'");
     }
 }

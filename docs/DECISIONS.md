@@ -251,3 +251,26 @@ Short records of the significant choices, why they were made and what they cost.
 **Why no component library.** The app has about ten pages. A library would add weight and a theming layer to learn, for little gain. Revisit if the UI grows significantly.
 
 **Verification.** axe-core in headless Chrome reports zero violations on all eight pages, and pages are usable at 375 px. One real bug was found this way: an absolutely positioned `.sr-only` table header escaped its scroll container and widened the page on phones.
+
+---
+
+## ADR-019 — Multi-tenancy: shared schema, four roles, isolation enforced twice
+
+**Model.** One database and one schema, with `organization_id` on every tenant-owned row (ADR-005). The tenant is always the authenticated user's organization, loaded from the database on every request.
+
+**Roles.**
+- **`PLATFORM_ADMIN`** has no organization. It creates organizations (each with its first admin, in one transaction) and suspends or reactivates them. It sees counts only, never customers or money: least privilege for the operator.
+- **`ORG_ADMIN`** manages one organization's staff, sees an overview, and reads the audit trail. It does not operate accounts; that is the agents' job (separation of duties).
+- **`AGENT`** and **`CLIENT`** are unchanged.
+
+**Lifecycle.**
+- *Suspension* keeps the data. Every user of the organization is rejected on their next request: the security filter checks the organization's status, and login reports the generic 401.
+- Organizations are *created* by the platform admin only. Public self-service sign-up would need abuse protection (captcha, e-mail verification) that is out of scope; it could come with plans in Phase 6.
+
+**Isolation enforced twice.**
+1. **Application:** tenant-scoped repository queries. Another organization's resources answer 404, so their existence is not revealed. A cross-tenant matrix test covers every tenant-scoped endpoint.
+2. **Database:** composite foreign keys `(x_id, organization_id) → parent(id, organization_id)`, for client→login, transfer→source/destination account, and ledger entry→account. A cross-tenant row cannot be stored even by code that bypasses the services.
+
+**Concurrency detail.** "Never disable the last active admin" cannot be broken by a single request, since the caller is itself an active admin. It *can* be broken by two admins disabling each other at the same instant. Staff changes lock the organization row, which serializes them; a concurrency test (and its mutation check) proves it.
+
+**Rejected alternatives.** Schema-per-tenant or database-per-tenant: stronger isolation, but migrations, connection pools and cross-tenant reporting multiply for no benefit at this scale. PostgreSQL row-level security: a valid next step for a third layer, at the cost of setting a session variable per transaction.

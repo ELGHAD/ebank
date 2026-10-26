@@ -26,7 +26,8 @@ import java.util.Optional;
  * <p>
  * Deliberately not a Spring bean: Boot would otherwise also register it as a servlet filter.
  * The request stays unauthenticated (protected endpoints then answer 401) when the token is invalid or
- * expired, the user is unknown or disabled, or the token was revoked (its version is older than the user's).
+ * expired, the user is unknown or disabled, the user's organization is suspended, or the token was revoked
+ * (its version is older than the user's).
  * A user who must change their password is authenticated without any role, so only the account endpoints
  * that need no role (me, password change, logout) are reachable.
  */
@@ -49,6 +50,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     .flatMap(jwtService::validate)
                     .flatMap(claims -> userRepo.findByUsername(claims.username())
                             .filter(AppUser::isEnabled)
+                            .filter(user -> user.getOrganization() == null || user.getOrganization().isActive())
                             .filter(user -> user.getTokenVersion() == claims.version()))
                     .ifPresent(user -> authenticate(user, request));
         }

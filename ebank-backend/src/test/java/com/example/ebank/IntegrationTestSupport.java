@@ -65,13 +65,22 @@ public abstract class IntegrationTestSupport {
 
     /** Creates an agent in the given organization and returns its username. */
     protected String newAgent(Organization org) {
-        AppUser agent = new AppUser();
-        agent.setOrganization(org);
-        agent.setUsername(unique("agent") + "@test.ebank");
-        agent.setPasswordHash(passwordEncoder.encode(AGENT_PASSWORD));
-        agent.getRoles().add(roleRepo.findByRoleName(AppRole.AGENT).orElseThrow());
-        userRepo.save(agent);
-        return agent.getUsername();
+        return newStaff(org, AppRole.AGENT);
+    }
+
+    /** Creates a user with the given role (password AGENT_PASSWORD, no forced change); org is null for platform admins. */
+    protected String newStaff(Organization org, String role) {
+        AppUser user = new AppUser();
+        user.setOrganization(org);
+        user.setUsername(unique(role.toLowerCase()) + "@test.ebank");
+        user.setPasswordHash(passwordEncoder.encode(AGENT_PASSWORD));
+        user.getRoles().add(roleRepo.findByRoleName(role).orElseThrow());
+        userRepo.save(user);
+        return user.getUsername();
+    }
+
+    protected String staffToken(Organization org, String role) throws Exception {
+        return token(newStaff(org, role), AGENT_PASSWORD);
     }
 
     /**

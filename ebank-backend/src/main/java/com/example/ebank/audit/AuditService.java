@@ -39,6 +39,12 @@ public class AuditService {
         repository.save(event(actor.organizationId(), actor.userId(), actor.username(), type, target, details));
     }
 
+    /** For platform-level actors (no organization of their own) acting on a given organization. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordFor(Long organizationId, AppUserPrincipal actor, AuditEventType type, String target, String details) {
+        repository.save(event(organizationId, actor.userId(), actor.username(), type, target, details));
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordIndependently(Long organizationId, Long userId, String username, AuditEventType type,
                                     String details) {

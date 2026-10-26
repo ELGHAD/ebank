@@ -59,3 +59,7 @@ app:
     organization-name: Demo Bank
     agent-username: ${DEMO_AGENT_USERNAME:agent@demo.ebank.test}
     agent-password: ${DEMO_AGENT_PASSWORD:}
+    org-admin-username: ${DEMO_ORG_ADMIN_USERNAME:admin@demo.ebank.test}
+    org-admin-password: ${DEMO_ORG_ADMIN_PASSWORD:}
+    platform-admin-username: ${DEMO_PLATFORM_ADMIN_USERNAME:platform@ebank.test}
+    platform-admin-password: ${DEMO_PLATFORM_ADMIN_PASSWORD:}

@@ -98,11 +98,27 @@ Screenshots of the verified flows: [docs/screenshots](screenshots).
 
 Not done: no seeded demo clients (the demo agent creates them); browser checks still run from a local script (Phase 7 commits them as Playwright tests).
 
+## Phase 5 — Multi-tenant organizations ✅ (2026-10-12)
+
+| Acceptance criterion | Result | Evidence |
+|---|---|---|
+| Roles PLATFORM_ADMIN and ORG_ADMIN, separated from tenant data | ✅ | `PlatformIntegrationTest`: the platform admin gets 403 on every tenant endpoint; bank admins cannot operate accounts |
+| Atomic provisioning (organization + first admin with a one-time password) | ✅ | `creationIsAtomic`: a duplicate e-mail leaves no organization behind |
+| Suspension cuts off every user immediately; reactivation restores access | ✅ | API test; **mutation check** (removing the check lets a suspended agent in); real browser |
+| Staff management: create agents/admins, enable/disable, not yourself | ✅ | `OrgAdminIntegrationTest`; disabled users lose access on the next request |
+| Never zero active admins, even under concurrency | ✅ | Two admins disabling each other at the same instant: one succeeds, one gets `LAST_ORG_ADMIN`; **mutation check**: without the organization row lock, the test fails (3 of 3 runs) |
+| Systematic cross-tenant check | ✅ | `CrossTenantIsolationTest`: 10 calls with another organization's ids, all refused, data unchanged; listings never include another organization's data |
+| Database-level isolation | ✅ | V4 composite foreign keys; test: the schema owner cannot insert a cross-tenant ledger entry, transfer or client |
+| Overview and staff UIs, platform UI | ✅ | Frontend 55 tests (all 17 files verified); real browser 16/16 across all four roles; axe-core 0 violations on the new pages |
+| Upgrade path | ✅ | V4 applied on the existing Docker volume (constraints validated existing rows) |
+| Suites | ✅ | Backend 175 tests; Phase 4 browser scenario still 21/21 |
+
+Not done: public self-service sign-up (deliberately; see ADR-019), a platform-level audit view, and an "enable/disable client logins" feature for bank admins.
+
 ## Later phases
 
-5. Multi-tenant organizations.
 6. Plans, quotas, simulated billing.
-7. E2E tests and CI gates (commit the headless-browser scenario, with its axe-core checks, as a Playwright suite).
+7. E2E tests and CI gates (commit the browser scenarios with their axe-core checks as a Playwright suite; warm the backend up before the first login).
 8. AWS deployment (separate cost proposal and approval first).
 9. Observability.
 10. Portfolio documentation.

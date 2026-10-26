@@ -3,7 +3,9 @@ import api, { setUnauthorizedHandler } from "../api/axiosClient";
 
 const AuthContext = createContext(null);
 
-const primaryRole = (roles = []) => (roles.includes("AGENT") ? "AGENT" : roles[0] || null);
+// Most privileged role first: it decides the home page and the navigation
+const ROLE_ORDER = ["PLATFORM_ADMIN", "ORG_ADMIN", "AGENT", "CLIENT"];
+const primaryRole = (roles = []) => ROLE_ORDER.find((r) => roles.includes(r)) ?? null;
 
 /**
  * status: "loading" while the session is being restored, then "authenticated" or "anonymous".
